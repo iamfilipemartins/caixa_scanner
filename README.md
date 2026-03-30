@@ -1,102 +1,66 @@
-# Caixa Auction Scanner (MVP)
+# Caixa Scanner
 
-Scanner em Python para monitorar imóveis da Caixa, enriquecer dados, calcular score de oportunidade e enviar alertas no Telegram.
+Scanner em Python para monitorar imóveis da Caixa, enriquecer dados públicos, calcular score de oportunidade e enviar alertas no Telegram.
 
-## O que este MVP faz
+## O que o projeto faz
 
-- baixa a lista oficial de imóveis da Caixa por UF (CSV público)
-- normaliza os dados e grava em SQLite
-- consulta a página de detalhe do imóvel
-- extrai informações úteis como formas de pagamento, FGTS, financiamento, matrícula e link de edital
-- calcula um score inicial de oportunidade
-- envia alertas no Telegram para imóveis acima de um score mínimo
+- baixa a lista oficial de imóveis da Caixa por UF
+- normaliza e persiste os dados em SQLite
+- consulta a página pública de detalhe do imóvel
+- extrai sinais úteis como FGTS, financiamento, matrícula e edital
+- calcula score de oportunidade e score focado em moradia
+- envia alertas filtrados no Telegram
+- disponibiliza dashboard em Streamlit com filtros e ranking
 
-## Fontes de dados suportadas neste MVP
+## Estrutura principal
 
-### 1) Lista completa de imóveis da Caixa
-Fonte principal e mais confiável para descoberta em escala.
-
-Exemplo de padrão de URL:
-- `https://venda-imoveis.caixa.gov.br/listaweb/Lista_imoveis_SP.csv`
-
-Campos normalmente presentes:
-- número do imóvel
-- UF
-- cidade
-- bairro
-- endereço
-- preço
-- valor de avaliação
-- desconto
-- financiamento
-- descrição
-
-### 2) Página pública de detalhe do imóvel
-Padrão:
-- `https://venda-imoveis.caixa.gov.br/sistema/detalhe-imovel.asp?hdnimovel=<ID>`
-
-Campos frequentemente extraídos:
-- pagamento aceito
-- permite FGTS
-- responsabilidade por condomínio/tributos
-- link para edital
-- link para matrícula
-- dados básicos da oferta
-
-### 3) Editais PDF da Caixa
-Quando houver edital vinculado, o sistema armazena o link. O parser de PDF foi deixado como extensão futura porque o layout varia conforme a modalidade.
-
-## Limitações reais de obtenção de dados
-
-### Dados com boa viabilidade de automação
-- lista oficial CSV da Caixa
-- página de detalhe do imóvel
-- link e metadados do edital
-- link da matrícula quando disponível
-- filtros internos por UF
-
-### Dados com viabilidade parcial
-- parsing detalhado do edital PDF
-- parsing da matrícula PDF
-- resultado oficial da licitação
-- ocupação real e passivos específicos
-
-### Dados mais difíceis ou frágeis
-- valor de mercado preciso via portais privados
-- aluguel real de mercado em escala sem contrato/API
-- condomínio/IPTU em aberto
-- status real de ocupação
-- litígios específicos do imóvel sem análise documental/jurídica
-
-## Recomendação prática
-
-Use o sistema em 3 camadas:
-
-1. **Camada automática confiável**
-   - Caixa CSV + detalhe do imóvel
-2. **Camada semi-automática**
-   - edital, matrícula e regras por modalidade
-3. **Camada humana**
-   - jurídico, vistoria, comparáveis de mercado e confirmação de ocupação
+- `src/caixa_scanner/sources`: ingestão de CSV e detalhe do imóvel
+- `src/caixa_scanner/valuation`: regras de score
+- `src/caixa_scanner/repository.py`: acesso aos dados
+- `src/caixa_scanner/pipeline.py`: orquestração dos fluxos
+- `src/caixa_scanner/dashboard/app.py`: dashboard Streamlit
+- `tests`: testes automatizados do parsing, scoring, repositório e pipeline
 
 ## Setup
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# .venv\Scripts\activate   # Windows
-pip install -r requirements.txt
-cp .env.example .env
 ```
 
-Preencha no `.env`:
+Ativação no Windows:
+
+```powershell
+.venv\Scripts\activate
+```
+
+Instale as dependências principais:
+
+```bash
+pip install -r requirements.txt
+```
+
+Se quiser rodar os testes:
+
+```bash
+pip install -e .[dev]
+```
+
+Crie o arquivo de ambiente:
+
+```bash
+copy .env.example .env
+```
+
+## Variáveis de ambiente
 
 ```env
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+TELEGRAM_CHAT_ID=your-telegram-chat-id
+TELEGRAM_ENABLED=true
 DATABASE_URL=sqlite:///caixa_scanner.db
 DEFAULT_UFS=SP,MG,RJ
 ALERT_MIN_SCORE=70
+ALERT_CITIES=IPATINGA,BELO HORIZONTE
 REQUEST_TIMEOUT=30
 USER_AGENT=Mozilla/5.0 (compatible; CaixaScanner/1.0)
 ```
@@ -109,100 +73,65 @@ Rodar pipeline completo:
 python -m caixa_scanner.main scan --ufs SP MG
 ```
 
-Escanear estados:
+Baixar CSVs:
 
 ```bash
-python -m caixa_scanner.main import-csv-batch ` "C:\Users\Administrador\Downloads\Lista_imoveis_MG.csv" ` "C:\Users\Administrador\Downloads\Lista_imoveis_SP.csv" ` "C:\Users\Administrador\Downloads\Lista_imoveis_RJ.csv"
+python -m caixa_scanner.main download-csv --ufs MG --ufs SP --output-dir C:\temp\caixa
 ```
 
-Escanear estado específico:
+Importar um CSV local:
 
 ```bash
 python -m caixa_scanner.main import-csv "C:\Users\Administrador\Downloads\Lista_imoveis_MG.csv"
 ```
-Somente listar oportunidades top:
+
+Importar vários CSVs:
 
 ```bash
-python -m caixa_scanner.main top --limit 20
+python -m caixa_scanner.main import-csv-batch "C:\Users\Administrador\Downloads\Lista_imoveis_MG.csv" "C:\Users\Administrador\Downloads\Lista_imoveis_SP.csv"
 ```
 
-Enviar alertas novamente para itens elegíveis:
-
-```bash
-python -m caixa_scanner.main alert --min-score 75
-```
-
-Enviar alertas novamente para cidades elegíveis:
+Enviar alertas:
 
 ```bash
 python -m caixa_scanner.main send-alerts --min-score 82 --cities "IPATINGA,BELO HORIZONTE" --limit 20
 ```
-## Score atual do MVP
 
-O score foi desenhado para ser conservador e explicável.
-
-Componentes:
-- desconto bruto
-- desconto vs avaliação
-- financiamento permitido
-- FGTS permitido
-- penalização por texto de risco na descrição
-- bônus por tipologia residencial
-- bônus por área/quartos/vaga quando detectáveis
-
-
-## Dashboard web
-
-O projeto agora inclui um dashboard em **Streamlit** para visualizar:
-
-- melhores oportunidades por estado
-- score médio e desconto médio por filtro
-- ranking geral filtrado
-- comparação entre score e desconto
-- exportação da base filtrada em CSV
-
-### Como abrir
-
-Depois de rodar um scan e popular o banco:
+Abrir dashboard:
 
 ```bash
 python -m caixa_scanner.main dashboard
 ```
 
-Ou diretamente com Streamlit:
+## Testes
 
 ```bash
-streamlit run src/caixa_scanner/dashboard/app.py
+python -m pytest
 ```
 
-Parâmetros opcionais:
+## Dashboard
 
-```bash
-python -m caixa_scanner.main dashboard --host 0.0.0.0 --port 8502
-```
+O dashboard permite:
 
-### O que o dashboard mostra
+- filtrar por UF, cidade, bairro, tipo, quartos, vagas, área, preço e score
+- visualizar KPIs agregados
+- comparar score e desconto
+- consultar rapidamente um imóvel por código
+- exportar a base filtrada em CSV
 
-- **Visão por estado**: melhor imóvel encontrado em cada UF filtrada
-- **KPIs**: quantidade, score médio, desconto médio e potencial bruto médio
-- **Gráficos**: score médio por estado, volume por estado e dispersão score x desconto
-- **Ranking detalhado**: tabela ordenada pelas melhores oportunidades
-- **Exportação**: download do CSV já filtrado
+## Limitações atuais
+
+- parsing de edital PDF ainda não foi implementado
+- parsing de matrícula PDF ainda não foi implementado
+- não há integração com comparáveis de mercado
+- o score atual é heurístico e conservador
+- o projeto é uma ferramenta de triagem, não um parecer jurídico ou avaliação definitiva
 
 ## Próximas evoluções sugeridas
 
-- parser robusto de edital PDF
+- parser de edital PDF
 - parser de matrícula PDF
-- integrações de comparáveis de mercado via upload manual/API licenciada
-- cache HTTP e fila de jobs
-- classificação por estratégia: moradia, aluguel, flip, evitar
-- modelo de valor justo por bairro/cidade
-
-## Observação importante
-
-Este projeto é um **scanner de triagem**, não um parecer jurídico ou avaliação definitiva. Em imóveis da Caixa, os maiores riscos costumam estar em:
-- ocupação
-- débitos e responsabilidades contratuais
-- liquidez da região
-- estado real de conservação
-- documentação
+- score por estratégia: moradia, aluguel e flip
+- histórico de mudanças de preço e desconto
+- cache HTTP e fila de processamento
+- modelo de valor justo por bairro e cidade
