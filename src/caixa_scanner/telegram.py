@@ -48,7 +48,7 @@ class TelegramNotifier:
         neighborhood = item.neighborhood or ""
         address = item.address or ""
         property_type = (item.property_type or "").title()
-        area = f"{item.private_area_m2:.2f} mÂ²" if item.private_area_m2 is not None else "N/I"
+        area = f"{item.private_area_m2:.2f} m²" if item.private_area_m2 is not None else "N/I"
         bedrooms = str(item.bedrooms) if item.bedrooms is not None else "N/I"
         parking = str(item.parking_spots) if item.parking_spots is not None else "N/I"
         price = (
@@ -63,20 +63,26 @@ class TelegramNotifier:
         )
         discount = f"{item.discount_pct:.2f}%" if item.discount_pct is not None else "N/I"
         score = f"{item.score_moradia:.2f}" if item.score_moradia is not None else "N/I"
+        sale_mode = item.edital_sale_mode or "N/I"
+        sale_date = item.edital_sale_date or "N/I"
+        edital_risks = item.edital_risk_notes or "N/I"
 
         return (
             "Oportunidade para moradia\n\n"
             f"Cidade: {city}/{uf}\n"
             f"Bairro: {neighborhood}\n"
-            f"EndereÃ§o: {address}\n"
+            f"Endereço: {address}\n"
             f"Tipo: {property_type}\n"
-            f"Ãrea privativa: {area}\n"
+            f"Área privativa: {area}\n"
             f"Quartos: {bedrooms}\n"
             f"Vagas: {parking}\n\n"
-            f"PreÃ§o: {price}\n"
-            f"AvaliaÃ§Ã£o: {appraisal}\n"
+            f"Preço: {price}\n"
+            f"Avaliação: {appraisal}\n"
             f"Desconto: {discount}\n"
-            f"Score moradia: {score}\n\n"
+            f"Score moradia: {score}\n"
+            f"Modalidade do edital: {sale_mode}\n"
+            f"Data relevante do edital: {sale_date}\n"
+            f"Riscos do edital: {edital_risks}\n\n"
             f"Motivo: {item.score_moradia_reason or item.score_reason or 'N/I'}\n\n"
             f"Link: {item.detail_url or ''}"
         )

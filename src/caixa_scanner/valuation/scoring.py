@@ -55,7 +55,8 @@ class OpportunityScorer:
 
         description = (item.description or "").lower()
         expense_rules = (item.expense_rules or "").lower()
-        combined_text = f"{description} {expense_rules}"
+        edital_risk_notes = (item.edital_risk_notes or "").lower()
+        combined_text = f"{description} {expense_rules} {edital_risk_notes}"
         for term, delta in RISK_TERMS.items():
             if term in combined_text:
                 score += delta

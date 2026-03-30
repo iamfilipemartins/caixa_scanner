@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 from sqlalchemy import create_engine
 
+SRC_ROOT = Path(__file__).resolve().parents[2]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
 from caixa_scanner.config import settings
+from caixa_scanner.database import init_db
 
 
 st.set_page_config(
@@ -38,6 +44,10 @@ def load_data() -> pd.DataFrame:
         detail_url,
         edital_url,
         matricula_url,
+        edital_sale_mode,
+        edital_sale_date,
+        edital_payment_details,
+        edital_risk_notes,
         accepts_fgts,
         accepts_financing,
         expense_rules,
@@ -95,6 +105,10 @@ def load_data() -> pd.DataFrame:
         "score_moradia_reason",
         "detail_url",
         "edital_url",
+        "edital_sale_mode",
+        "edital_sale_date",
+        "edital_payment_details",
+        "edital_risk_notes",
     ]
 
     for col in numeric_cols:
@@ -327,6 +341,8 @@ def render_state_ranking(df: pd.DataFrame) -> None:
             "accepts_financing_label",
             "accepts_fgts_label",
             "detail_url",
+            "edital_sale_mode",
+            "edital_sale_date",
             "description_short",
             "address",
         ]]
@@ -353,6 +369,8 @@ def render_state_ranking(df: pd.DataFrame) -> None:
                 "accepts_financing_label": "Financiamento",
                 "accepts_fgts_label": "FGTS",
                 "detail_url": "Detalhe",
+                "edital_sale_mode": "Modalidade edital",
+                "edital_sale_date": "Data edital",
                 "description_short": "Descrição",
                 "address": "Endereço",
             }
@@ -417,6 +435,9 @@ def render_top_table(df: pd.DataFrame) -> None:
             "accepts_fgts_label",
             "opportunity_score_display",
             "score_reason",
+            "edital_sale_mode",
+            "edital_sale_date",
+            "edital_risk_notes",
             "detail_url",
             "edital_url",
         ]]
@@ -437,6 +458,9 @@ def render_top_table(df: pd.DataFrame) -> None:
                 "accepts_fgts_label": "FGTS",
                 "opportunity_score_display": "Score",
                 "score_reason": "Motivos do score",
+                "edital_sale_mode": "Modalidade edital",
+                "edital_sale_date": "Data edital",
+                "edital_risk_notes": "Riscos edital",
                 "detail_url": "Detalhe",
                 "edital_url": "Edital",
             }
@@ -501,7 +525,11 @@ def render_property_cards(df: pd.DataFrame, limit: int = 20) -> None:
                     if finance_parts:
                         st.markdown(" • ".join(finance_parts))
 
-                    if row.get("score_moradia_reason"):
+                    if row.get("edital_sale_mode"):
+                        st.caption(f"Edital: {row['edital_sale_mode']} | {row.get('edital_sale_date') or 'sem data'}")
+                    if row.get("edital_risk_notes"):
+                        st.caption(f"Riscos: {row['edital_risk_notes']}")
+                    elif row.get("score_moradia_reason"):
                         st.caption(row["score_moradia_reason"])
                     elif row.get("score_reason"):
                         st.caption(row["score_reason"])
@@ -538,6 +566,9 @@ def render_quick_lookup(df: pd.DataFrame) -> None:
     )
     st.markdown(f"**Desconto:** {row.get('discount_pct', '')}")
     st.markdown(f"**Score moradia:** {row.get('score_moradia', '')}")
+    st.markdown(f"**Modalidade do edital:** {row.get('edital_sale_mode', '')}")
+    st.markdown(f"**Data do edital:** {row.get('edital_sale_date', '')}")
+    st.markdown(f"**Riscos do edital:** {row.get('edital_risk_notes', '')}")
     st.markdown(f"**Descrição completa:** {row.get('description', '')}")
     detail_url = row.get("detail_url", "")
     if detail_url:
@@ -547,6 +578,8 @@ def render_quick_lookup(df: pd.DataFrame) -> None:
 def main() -> None:
     st.title("🏠 Caixa Scanner Dashboard")
     st.caption("Visão rápida das melhores oportunidades por estado, com filtros e ranking geral.")
+
+    init_db()
 
     db_hint = Path(settings.database_url.replace("sqlite:///", "")) if settings.database_url.startswith("sqlite:///") else None
     if db_hint:
@@ -582,6 +615,9 @@ def main() -> None:
         "score_liquidez_residencial",
         "score_risco",
         "score_moradia_reason",
+        "edital_sale_mode",
+        "edital_sale_date",
+        "edital_risk_notes",
         "detail_url",
         "description_short",
     ]
@@ -607,6 +643,9 @@ def main() -> None:
             "score_liquidez_residencial": "Score liquidez",
             "score_risco": "Score risco",
             "score_moradia_reason": "Justificativa",
+            "edital_sale_mode": "Modalidade edital",
+            "edital_sale_date": "Data edital",
+            "edital_risk_notes": "Riscos edital",
             "detail_url": "Link",
             "description_short": "Descrição",
         }

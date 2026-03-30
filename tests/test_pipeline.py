@@ -44,6 +44,7 @@ def test_scan_uses_property_contract_and_falls_back_when_detail_enrichment_fails
 
     pipeline = CaixaScannerPipeline()
     monkeypatch.setattr(pipeline.csv_source, "fetch_many", lambda ufs: [property_item])
+    monkeypatch.setattr(pipeline.edital_source, "enrich", lambda item: item)
 
     def raise_on_enrich(item):
         raise RuntimeError("detail unavailable")

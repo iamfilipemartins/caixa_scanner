@@ -26,6 +26,10 @@ class Property(Base):
     detail_url: Mapped[str | None] = mapped_column(Text)
     edital_url: Mapped[str | None] = mapped_column(Text)
     matricula_url: Mapped[str | None] = mapped_column(Text)
+    edital_sale_mode: Mapped[str | None] = mapped_column(String(120))
+    edital_sale_date: Mapped[str | None] = mapped_column(String(40))
+    edital_payment_details: Mapped[str | None] = mapped_column(Text)
+    edital_risk_notes: Mapped[str | None] = mapped_column(Text)
 
     accepts_fgts: Mapped[bool | None] = mapped_column(Boolean)
     accepts_financing: Mapped[bool | None] = mapped_column(Boolean)

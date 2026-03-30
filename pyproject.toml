@@ -16,7 +16,8 @@ dependencies = [
   "requests==2.32.3",
   "SQLAlchemy==2.0.40",
   "typer==0.16.0",
-  "streamlit==1.44.1"
+  "streamlit==1.44.1",
+  "pypdf==5.4.0"
 ]
 
 [project.optional-dependencies]

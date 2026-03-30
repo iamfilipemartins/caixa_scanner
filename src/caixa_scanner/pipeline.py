@@ -10,6 +10,7 @@ from .repository import PropertyRepository
 from .schemas import PropertyIn
 from .sources.caixa_csv import CaixaCsvSource
 from .sources.caixa_detail import CaixaDetailSource
+from .sources.caixa_edital import CaixaEditalSource
 from .valuation.scoring import OpportunityScorer
 from .valuation.scoring_moradia import build_moradia_scores
 
@@ -21,6 +22,7 @@ class CaixaScannerPipeline:
     def __init__(self) -> None:
         self.csv_source = CaixaCsvSource()
         self.detail_source = CaixaDetailSource()
+        self.edital_source = CaixaEditalSource()
         self.scorer = OpportunityScorer()
         self.alerter = TelegramNotifier()
 
@@ -39,6 +41,15 @@ class CaixaScannerPipeline:
                     exc,
                 )
                 enriched = item
+
+            try:
+                enriched = self.edital_source.enrich(enriched)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to parse edital for property %s: %s",
+                    enriched.property_code,
+                    exc,
+                )
 
             result = self.scorer.score(enriched)
             enriched_items.append(
