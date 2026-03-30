@@ -17,7 +17,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 
-app = typer.Typer(help="Scanner de oportunidades de imóveis Caixa")
+app = typer.Typer(help="Scanner de oportunidades de imoveis Caixa")
 
 
 @app.command()
@@ -26,41 +26,52 @@ def scan(ufs: list[str] = typer.Option(None, "--ufs")) -> None:
     pipeline = CaixaScannerPipeline()
     normalized_ufs = settings.normalize_ufs(ufs)
     total = pipeline.scan(normalized_ufs)
-    typer.echo(f"{total} imóveis processados para: {', '.join(normalized_ufs)}")
+    typer.echo(f"{total} imoveis processados para: {', '.join(normalized_ufs)}")
 
 
 @app.command("download-csv")
 def download_csv(
     ufs: list[str] = typer.Option(..., "--ufs"),
     output_dir: str = typer.Option(..., "--output-dir"),
-):
+) -> None:
     pipeline = CaixaScannerPipeline()
     files = pipeline.download_csvs(ufs, output_dir)
     typer.echo(f"{len(files)} arquivo(s) baixado(s).")
 
 
 @app.command("import-csv")
-def import_csv(file_path: str):
+def import_csv(file_path: str) -> None:
     pipeline = CaixaScannerPipeline()
     total = pipeline.import_csv(file_path)
-    typer.echo(f"{total} imóveis importados do arquivo: {file_path}")
+    typer.echo(f"{total} imoveis importados do arquivo: {file_path}")
 
 
 @app.command("import-csv-batch")
-def import_csv_batch(file_paths: list[str]):
+def import_csv_batch(file_paths: list[str]) -> None:
     pipeline = CaixaScannerPipeline()
     total = pipeline.import_csv_batch(file_paths)
-    typer.echo(f"{total} imóveis importados a partir de {len(file_paths)} arquivos.")
+    typer.echo(f"{total} imoveis importados a partir de {len(file_paths)} arquivos.")
 
 
 @app.command("download-and-import-csv")
 def download_and_import_csv(
     ufs: list[str] = typer.Option(..., "--ufs"),
     output_dir: str = typer.Option(..., "--output-dir"),
-):
+) -> None:
     pipeline = CaixaScannerPipeline()
     total = pipeline.download_and_import_csvs(ufs, output_dir)
-    typer.echo(f"{total} imóveis baixados/importados.")
+    typer.echo(f"{total} imoveis baixados/importados.")
+
+
+@app.command("reprocess")
+def reprocess(
+    limit: int = typer.Option(100, "--limit"),
+    pending_only: bool = typer.Option(True, "--pending-only/--all"),
+    rescore_only: bool = typer.Option(False, "--rescore-only"),
+) -> None:
+    pipeline = CaixaScannerPipeline()
+    total = pipeline.reprocess(limit=limit, pending_only=pending_only, rescore_only=rescore_only)
+    typer.echo(f"{total} imoveis reprocessados.")
 
 
 @app.command()
@@ -73,7 +84,7 @@ def top(limit: int = 20) -> None:
         for item in items:
             typer.echo(
                 f"score={item.opportunity_score:>5} | uf={item.uf} | cidade={item.city} | bairro={item.neighborhood} | "
-                f"preço={item.price} | desconto={item.discount_pct} | código={item.property_code}"
+                f"preco={item.price} | desconto={item.discount_pct} | codigo={item.property_code}"
             )
 
 
@@ -82,7 +93,7 @@ def send_alerts(
     min_score: float = typer.Option(80.0, "--min-score"),
     cities: str = typer.Option(",".join(settings.alert_cities), "--cities"),
     limit: int = typer.Option(50, "--limit"),
-):
+) -> None:
     pipeline = CaixaScannerPipeline()
     city_list = [c.strip().upper() for c in cities.split(",") if c.strip()]
     total = pipeline.send_alerts(min_score=min_score, cities=city_list, limit=limit)
@@ -91,7 +102,7 @@ def send_alerts(
 
 @app.command()
 def alert(min_score: float = typer.Option(settings.alert_min_score, "--min-score")) -> None:
-    """Envia alertas Telegram para imóveis elegíveis."""
+    """Envia alertas Telegram para imoveis elegiveis."""
     pipeline = CaixaScannerPipeline()
     total = pipeline.send_alerts(min_score=min_score)
     typer.echo(f"{total} alerta(s) processado(s).")

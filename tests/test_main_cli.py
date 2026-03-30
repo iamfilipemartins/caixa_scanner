@@ -29,6 +29,10 @@ class DummyPipeline:
         self.last_download = (ufs, output_dir)
         return ["a.csv", "b.csv"]
 
+    def reprocess(self, limit=100, pending_only=True, rescore_only=False):
+        self.last_reprocess = (limit, pending_only, rescore_only)
+        return 6
+
     def send_alerts(self, min_score=None, cities=None, limit=50):
         self.last_alerts = (min_score, cities, limit)
         return 2
@@ -41,7 +45,7 @@ def test_scan_command_uses_normalized_ufs(monkeypatch):
     result = runner.invoke(main.app, ["scan", "--ufs", "mg", "--ufs", "sp"])
 
     assert result.exit_code == 0
-    assert "7 imóveis processados para: MG, SP" in result.stdout
+    assert "7 imoveis processados para: MG, SP" in result.stdout
     assert pipeline.last_scan == ["MG", "SP"]
 
 
@@ -66,5 +70,16 @@ def test_import_csv_command_reports_result(monkeypatch):
     result = runner.invoke(main.app, ["import-csv", "C:\\temp\\lista.csv"])
 
     assert result.exit_code == 0
-    assert "3 imóveis importados do arquivo: C:\\temp\\lista.csv" in result.stdout
+    assert "3 imoveis importados do arquivo: C:\\temp\\lista.csv" in result.stdout
     assert pipeline.last_import == "C:\\temp\\lista.csv"
+
+
+def test_reprocess_command_passes_incremental_flags(monkeypatch):
+    pipeline = DummyPipeline()
+    monkeypatch.setattr(main, "CaixaScannerPipeline", lambda: pipeline)
+
+    result = runner.invoke(main.app, ["reprocess", "--limit", "25", "--all", "--rescore-only"])
+
+    assert result.exit_code == 0
+    assert "6 imoveis reprocessados." in result.stdout
+    assert pipeline.last_reprocess == (25, False, True)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -32,6 +34,11 @@ class PropertyIn(BaseModel):
     payment_rules: str | None = None
     bedrooms: int | None = None
     parking_spots: int | None = None
+    imported_at: datetime | None = None
+    detail_enriched_at: datetime | None = None
+    edital_enriched_at: datetime | None = None
+    scored_at: datetime | None = None
+    scoring_version: str | None = None
     opportunity_score: float | None = Field(default=None, ge=0, le=100)
     score_reason: str | None = None
     property_type: str | None = None

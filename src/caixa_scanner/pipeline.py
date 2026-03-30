@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from caixa_scanner.config import settings
 from caixa_scanner.telegram import TelegramNotifier
 
 from .database import SessionLocal, init_db
+from .models import Property
 from .repository import PropertyRepository
 from .schemas import PropertyIn
 from .sources.caixa_csv import CaixaCsvSource
@@ -16,6 +18,7 @@ from .valuation.scoring_moradia import build_moradia_scores
 
 
 logger = logging.getLogger(__name__)
+SCORING_VERSION = "moradia-v1-edital-flags"
 
 
 class CaixaScannerPipeline:
@@ -26,40 +29,57 @@ class CaixaScannerPipeline:
         self.scorer = OpportunityScorer()
         self.alerter = TelegramNotifier()
 
+    @staticmethod
+    def _utcnow() -> datetime:
+        return datetime.utcnow()
+
+    @staticmethod
+    def _property_to_input(item: Property) -> PropertyIn:
+        payload = {
+            column.name: getattr(item, column.name, None)
+            for column in Property.__table__.columns
+            if column.name != "id"
+        }
+        return PropertyIn(**payload)
+
+    def _mark_imported(self, item: PropertyIn) -> PropertyIn:
+        return item.model_copy(update={"imported_at": self._utcnow()})
+
+    def _mark_detail_enriched(self, item: PropertyIn) -> PropertyIn:
+        return item.model_copy(update={"detail_enriched_at": self._utcnow()})
+
+    def _mark_edital_enriched(self, item: PropertyIn) -> PropertyIn:
+        return item.model_copy(update={"edital_enriched_at": self._utcnow()})
+
+    def _attach_score(self, item: PropertyIn) -> PropertyIn:
+        result = self.scorer.score(item)
+        return item.model_copy(
+            update={
+                "opportunity_score": result.score,
+                "score_reason": result.reason,
+                "scored_at": self._utcnow(),
+                "scoring_version": SCORING_VERSION,
+            }
+        )
+
     def scan(self, ufs: list[str]) -> int:
         init_db()
-        base_items = self.csv_source.fetch_many(ufs)
+        base_items = [self._mark_imported(item) for item in self.csv_source.fetch_many(ufs)]
         enriched_items: list[PropertyIn] = []
 
         for item in base_items:
             try:
-                enriched = self.detail_source.enrich(item)
+                enriched = self._mark_detail_enriched(self.detail_source.enrich(item))
             except Exception as exc:
-                logger.warning(
-                    "Failed to enrich property %s: %s",
-                    item.property_code,
-                    exc,
-                )
+                logger.warning("Failed to enrich property %s: %s", item.property_code, exc)
                 enriched = item
 
             try:
-                enriched = self.edital_source.enrich(enriched)
+                enriched = self._mark_edital_enriched(self.edital_source.enrich(enriched))
             except Exception as exc:
-                logger.warning(
-                    "Failed to parse edital for property %s: %s",
-                    enriched.property_code,
-                    exc,
-                )
+                logger.warning("Failed to parse edital for property %s: %s", enriched.property_code, exc)
 
-            result = self.scorer.score(enriched)
-            enriched_items.append(
-                enriched.model_copy(
-                    update={
-                        "opportunity_score": result.score,
-                        "score_reason": result.reason,
-                    }
-                )
-            )
+            enriched_items.append(self._attach_score(enriched))
 
         with SessionLocal() as session:
             repo = PropertyRepository(session)
@@ -79,8 +99,16 @@ class CaixaScannerPipeline:
 
     def import_csv(self, file_path: str) -> int:
         init_db()
-        base_items = self.csv_source.fetch_properties_from_csv_file(file_path)
-        scored_items = [build_moradia_scores(item) for item in base_items]
+        base_items = [self._mark_imported(item) for item in self.csv_source.fetch_properties_from_csv_file(file_path)]
+        scored_items = [
+            build_moradia_scores(item).model_copy(
+                update={
+                    "scored_at": self._utcnow(),
+                    "scoring_version": SCORING_VERSION,
+                }
+            )
+            for item in base_items
+        ]
 
         with SessionLocal() as session:
             repo = PropertyRepository(session)
@@ -95,14 +123,22 @@ class CaixaScannerPipeline:
         for file_path in file_paths:
             logger.info("Importing CSV file in batch: %s", file_path)
             items = self.csv_source.fetch_properties_from_csv_file(file_path)
-            all_items.extend(items)
+            all_items.extend(self._mark_imported(item) for item in items)
 
         unique_items: dict[str, PropertyIn] = {}
         for item in all_items:
             unique_items[item.property_code] = item
 
         deduped_items = list(unique_items.values())
-        scored_items = [build_moradia_scores(item) for item in deduped_items]
+        scored_items = [
+            build_moradia_scores(item).model_copy(
+                update={
+                    "scored_at": self._utcnow(),
+                    "scoring_version": SCORING_VERSION,
+                }
+            )
+            for item in deduped_items
+        ]
 
         with SessionLocal() as session:
             repo = PropertyRepository(session)
@@ -115,6 +151,49 @@ class CaixaScannerPipeline:
         if not files:
             return 0
         return self.import_csv_batch(files)
+
+    def reprocess(self, limit: int = 100, pending_only: bool = True, rescore_only: bool = False) -> int:
+        init_db()
+
+        with SessionLocal() as session:
+            repo = PropertyRepository(session)
+            candidates = repo.list_reprocess_candidates(
+                limit=limit,
+                pending_only=pending_only,
+                scoring_version=SCORING_VERSION,
+            )
+
+            if not candidates:
+                logger.info("No properties eligible for reprocessing.")
+                return 0
+
+            updated_items: list[PropertyIn] = []
+            for candidate in candidates:
+                item = self._property_to_input(candidate)
+
+                if not rescore_only and item.detail_url and item.detail_enriched_at is None:
+                    try:
+                        item = self._mark_detail_enriched(self.detail_source.enrich(item))
+                    except Exception as exc:
+                        logger.warning("Failed to refresh detail for property %s: %s", item.property_code, exc)
+
+                if not rescore_only and item.edital_url and item.edital_enriched_at is None:
+                    try:
+                        item = self._mark_edital_enriched(self.edital_source.enrich(item))
+                    except Exception as exc:
+                        logger.warning("Failed to refresh edital for property %s: %s", item.property_code, exc)
+
+                needs_rescore = (
+                    rescore_only
+                    or item.scored_at is None
+                    or item.scoring_version != SCORING_VERSION
+                )
+                if needs_rescore:
+                    item = self._attach_score(item)
+
+                updated_items.append(item)
+
+            return repo.upsert_many(updated_items)
 
     def send_alerts(
         self,
@@ -147,12 +226,7 @@ class CaixaScannerPipeline:
                     ok = self.alerter.send_message(text)
                     if ok:
                         sent_ids.append(item.id)
-                        logger.info(
-                            "Alert sent for property %s (%s/%s)",
-                            item.property_code,
-                            item.city,
-                            item.uf,
-                        )
+                        logger.info("Alert sent for property %s (%s/%s)", item.property_code, item.city, item.uf)
                     else:
                         logger.warning("Alert sending failed for property %s", item.property_code)
                 except Exception as exc:

@@ -40,6 +40,11 @@ class Property(Base):
     accepts_financing: Mapped[bool | None] = mapped_column(Boolean)
     expense_rules: Mapped[str | None] = mapped_column(Text)
     payment_rules: Mapped[str | None] = mapped_column(Text)
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime)
+    detail_enriched_at: Mapped[datetime | None] = mapped_column(DateTime)
+    edital_enriched_at: Mapped[datetime | None] = mapped_column(DateTime)
+    scored_at: Mapped[datetime | None] = mapped_column(DateTime)
+    scoring_version: Mapped[str | None] = mapped_column(String(64))
 
     bedrooms: Mapped[int | None] = mapped_column(Integer)
     parking_spots: Mapped[int | None] = mapped_column(Integer)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .models import Property
@@ -59,8 +59,8 @@ class PropertyRepository:
         for item in properties:
             item.last_alerted_at = now
         self.session.commit()
-    
-    def list_alert_candidates(self, min_score: float, cities: list[str], limit: int = 50):
+
+    def list_alert_candidates(self, min_score: float, cities: list[str], limit: int = 50) -> list[Property]:
         normalized_cities = [c.strip().upper() for c in cities if c and c.strip()]
 
         stmt = (
@@ -80,7 +80,6 @@ class PropertyRepository:
             return 0
 
         now = datetime.utcnow()
-
         stmt = select(Property).where(Property.id.in_(property_ids))
         items = list(self.session.execute(stmt).scalars().all())
 
@@ -89,3 +88,24 @@ class PropertyRepository:
 
         self.session.commit()
         return len(items)
+
+    def list_reprocess_candidates(
+        self,
+        limit: int = 100,
+        pending_only: bool = True,
+        scoring_version: str | None = None,
+    ) -> list[Property]:
+        stmt = select(Property).order_by(Property.updated_at.desc()).limit(limit)
+
+        if pending_only:
+            conditions = [
+                Property.detail_enriched_at.is_(None),
+                Property.edital_enriched_at.is_(None),
+                Property.scored_at.is_(None),
+            ]
+            if scoring_version:
+                conditions.append(Property.scoring_version.is_(None))
+                conditions.append(Property.scoring_version != scoring_version)
+            stmt = stmt.where(or_(*conditions))
+
+        return list(self.session.scalars(stmt))

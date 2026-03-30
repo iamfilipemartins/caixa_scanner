@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from caixa_scanner.database import Base
 from caixa_scanner.models import Property
 from caixa_scanner.repository import PropertyRepository
+from caixa_scanner.schemas import PropertyIn
 
 
 def build_session():
@@ -51,3 +52,28 @@ def test_list_alert_candidates_filters_by_city_score_and_alert_status():
     )
 
     assert [item.property_code for item in candidates] == ["A1"]
+
+
+def test_upsert_preserves_audit_fields():
+    session = build_session()
+    repo = PropertyRepository(session)
+    imported_at = datetime(2026, 3, 30, 10, 0, 0)
+    scored_at = datetime(2026, 3, 30, 10, 5, 0)
+
+    repo.upsert_many(
+        [
+            PropertyIn(
+                property_code="B1",
+                city="IPATINGA",
+                uf="MG",
+                imported_at=imported_at,
+                scored_at=scored_at,
+                scoring_version="moradia-v1-edital-flags",
+            )
+        ]
+    )
+
+    saved = session.query(Property).filter_by(property_code="B1").one()
+    assert saved.imported_at == imported_at
+    assert saved.scored_at == scored_at
+    assert saved.scoring_version == "moradia-v1-edital-flags"

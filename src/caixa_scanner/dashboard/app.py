@@ -106,6 +106,11 @@ def load_data() -> pd.DataFrame:
         score_risco,
         score_moradia,
         score_moradia_reason,
+        imported_at,
+        detail_enriched_at,
+        edital_enriched_at,
+        scored_at,
+        scoring_version,
         created_at,
         updated_at,
         last_alerted_at
@@ -147,11 +152,21 @@ def load_data() -> pd.DataFrame:
         "edital_sale_date",
         "edital_payment_details",
         "edital_risk_notes",
+        "scoring_version",
     ]
     bool_cols = [
         "accepts_fgts",
         "accepts_financing",
         *RISK_FLAG_LABELS.keys(),
+    ]
+    datetime_cols = [
+        "imported_at",
+        "detail_enriched_at",
+        "edital_enriched_at",
+        "scored_at",
+        "created_at",
+        "updated_at",
+        "last_alerted_at",
     ]
 
     for col in numeric_cols:
@@ -169,6 +184,11 @@ def load_data() -> pd.DataFrame:
         if col not in df.columns:
             df[col] = pd.Series([None] * len(df), dtype="boolean")
         df[col] = df[col].astype("boolean")
+
+    for col in datetime_cols:
+        if col not in df.columns:
+            df[col] = pd.NaT
+        df[col] = pd.to_datetime(df[col], errors="coerce")
 
     df["opportunity_score_display"] = df["score_moradia"].where(
         df["score_moradia"].notna(),
@@ -196,6 +216,10 @@ def load_data() -> pd.DataFrame:
     for column, label in RISK_FLAG_LABELS.items():
         df[f"{column}_label"] = df[column].apply(bool_to_label)
     df["edital_risk_flags"] = df.apply(build_risk_flag_summary, axis=1)
+    df["pipeline_status"] = "Completo"
+    df.loc[df["detail_enriched_at"].isna(), "pipeline_status"] = "Pendente detalhe"
+    df.loc[df["edital_enriched_at"].isna(), "pipeline_status"] = "Pendente edital"
+    df.loc[df["scored_at"].isna(), "pipeline_status"] = "Pendente score"
     return df
 
 
@@ -240,6 +264,20 @@ def build_filters(df: pd.DataFrame) -> pd.DataFrame:
         selected = st.sidebar.multiselect("Modalidade do edital", options)
         if selected:
             filtered = filtered[filtered["edital_sale_mode"].isin(selected)]
+
+    if "scoring_version" in filtered.columns:
+        options = sorted([x for x in filtered["scoring_version"].dropna().astype(str).unique().tolist() if x])
+        selected = st.sidebar.multiselect("Versao do score", options)
+        if selected:
+            filtered = filtered[filtered["scoring_version"].isin(selected)]
+
+    if "pipeline_status" in filtered.columns:
+        status_filter = st.sidebar.selectbox(
+            "Status da pipeline",
+            ["Todos", "Completo", "Pendente detalhe", "Pendente edital", "Pendente score"],
+        )
+        if status_filter != "Todos":
+            filtered = filtered[filtered["pipeline_status"] == status_filter]
 
     for field_name, label in [
         ("bedrooms", "Quartos"),
@@ -335,12 +373,12 @@ def render_kpis(df: pd.DataFrame) -> None:
     score_mean = round(df["opportunity_score_display"].dropna().mean(), 2) if not df.empty else 0.0
     discount_mean = round(df["discount_pct"].dropna().mean(), 2) if not df.empty else 0.0
     gain_mean = round(df["estimated_gain"].dropna().mean(), 2) if not df.empty else 0.0
-    occupied_share = round(df["edital_has_occupied_risk"].fillna(False).mean() * 100, 1) if not df.empty else 0.0
+    pending_share = round((df["pipeline_status"] != "Completo").mean() * 100, 1) if not df.empty else 0.0
 
     col1.metric("Score medio", score_mean)
     col2.metric("Desconto medio (%)", discount_mean)
     col3.metric("Ganho bruto medio (R$)", f"{gain_mean:,.2f}")
-    col4.metric("Com risco de ocupacao (%)", occupied_share)
+    col4.metric("Pendentes na pipeline (%)", pending_share)
 
 
 def render_state_ranking(df: pd.DataFrame) -> None:
@@ -367,6 +405,8 @@ def render_state_ranking(df: pd.DataFrame) -> None:
                 "accepts_fgts_label",
                 "edital_sale_mode",
                 "edital_risk_flags",
+                "pipeline_status",
+                "scoring_version",
                 "detail_url",
             ]
         ]
@@ -389,6 +429,8 @@ def render_state_ranking(df: pd.DataFrame) -> None:
                 "accepts_fgts_label": "FGTS",
                 "edital_sale_mode": "Modalidade edital",
                 "edital_risk_flags": "Riscos estruturados",
+                "pipeline_status": "Status pipeline",
+                "scoring_version": "Versao score",
                 "detail_url": "Detalhe",
             }
         )
@@ -458,6 +500,9 @@ def render_top_table(df: pd.DataFrame) -> None:
                 "edital_sale_date",
                 "edital_risk_notes",
                 "edital_risk_flags",
+                "pipeline_status",
+                "scoring_version",
+                "scored_at",
                 "detail_url",
                 "edital_url",
             ]
@@ -483,6 +528,9 @@ def render_top_table(df: pd.DataFrame) -> None:
                 "edital_sale_date": "Data edital",
                 "edital_risk_notes": "Riscos em texto",
                 "edital_risk_flags": "Riscos estruturados",
+                "pipeline_status": "Status pipeline",
+                "scoring_version": "Versao score",
+                "scored_at": "Score em",
                 "detail_url": "Detalhe",
                 "edital_url": "Edital",
             }
@@ -548,6 +596,10 @@ def render_property_cards(df: pd.DataFrame, limit: int = 20) -> None:
 
                     if row.get("edital_sale_mode"):
                         st.caption(f"Edital: {row['edital_sale_mode']} | {row.get('edital_sale_date') or 'sem data'}")
+                    st.caption(
+                        f"Pipeline: {row.get('pipeline_status', '')} | "
+                        f"Score: {row.get('scoring_version', '') or 'sem versao'}"
+                    )
                     if row.get("edital_risk_flags"):
                         st.caption(f"Riscos estruturados: {row['edital_risk_flags']}")
                     elif row.get("edital_risk_notes"):
@@ -588,6 +640,12 @@ def render_quick_lookup(df: pd.DataFrame) -> None:
     st.markdown(f"**Data do edital:** {row.get('edital_sale_date', '')}")
     st.markdown(f"**Riscos estruturados:** {row.get('edital_risk_flags', '')}")
     st.markdown(f"**Riscos em texto:** {row.get('edital_risk_notes', '')}")
+    st.markdown(f"**Status da pipeline:** {row.get('pipeline_status', '')}")
+    st.markdown(f"**Versao do score:** {row.get('scoring_version', '')}")
+    st.markdown(f"**Importado em:** {row.get('imported_at', '')}")
+    st.markdown(f"**Detalhe em:** {row.get('detail_enriched_at', '')}")
+    st.markdown(f"**Edital em:** {row.get('edital_enriched_at', '')}")
+    st.markdown(f"**Score em:** {row.get('scored_at', '')}")
     st.markdown(f"**Descricao completa:** {row.get('description', '')}")
     detail_url = row.get("detail_url", "")
     if detail_url:
@@ -640,6 +698,12 @@ def main() -> None:
         "edital_sale_date",
         "edital_risk_notes",
         "edital_risk_flags",
+        "pipeline_status",
+        "scoring_version",
+        "imported_at",
+        "detail_enriched_at",
+        "edital_enriched_at",
+        "scored_at",
         "detail_url",
         "description_short",
     ]
@@ -668,6 +732,12 @@ def main() -> None:
             "edital_sale_date": "Data edital",
             "edital_risk_notes": "Riscos em texto",
             "edital_risk_flags": "Riscos estruturados",
+            "pipeline_status": "Status pipeline",
+            "scoring_version": "Versao score",
+            "imported_at": "Importado em",
+            "detail_enriched_at": "Detalhe em",
+            "edital_enriched_at": "Edital em",
+            "scored_at": "Score em",
             "detail_url": "Link",
             "description_short": "Descricao",
         }
