@@ -9,7 +9,9 @@ from ..config import settings
 from ..schemas import PropertyIn
 from ..utils import build_session, compact_spaces, parse_brl_number
 
+
 BASE_URL = "https://venda-imoveis.caixa.gov.br"
+
 
 def parse_fgts(text: str):
     text_norm = (text or "").lower()
@@ -37,6 +39,7 @@ def parse_financing(text: str):
 
     return None
 
+
 class CaixaDetailSource:
     def __init__(self) -> None:
         self.session = build_session()
@@ -49,23 +52,16 @@ class CaixaDetailSource:
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "lxml")
         text = soup.get_text("\n", strip=True)
-
-        accepts_fgts = None
-        accepts_financing = None
-
         page_text_norm = (text or "").lower()
 
         accepts_fgts = parse_fgts(page_text_norm)
         accepts_financing = parse_financing(page_text_norm)
 
-        item.accepts_fgts = accepts_fgts
-        item.accepts_financing = accepts_financing
-
         edital_url = None
         matricula_url = None
-        for a in soup.find_all("a", href=True):
-            label = compact_spaces(a.get_text(" ", strip=True)) or ""
-            href = urljoin(BASE_URL, a["href"])
+        for anchor in soup.find_all("a", href=True):
+            label = compact_spaces(anchor.get_text(" ", strip=True)) or ""
+            href = urljoin(BASE_URL, anchor["href"])
             low = label.lower()
             if "edital" in low:
                 edital_url = href

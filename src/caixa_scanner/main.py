@@ -17,7 +17,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 
-app = typer.Typer(help="Scanner de oportunidades de imÃ³veis Caixa")
+app = typer.Typer(help="Scanner de oportunidades de imóveis Caixa")
 
 
 @app.command()
@@ -26,7 +26,7 @@ def scan(ufs: list[str] = typer.Option(None, "--ufs")) -> None:
     pipeline = CaixaScannerPipeline()
     normalized_ufs = settings.normalize_ufs(ufs)
     total = pipeline.scan(normalized_ufs)
-    typer.echo(f"{total} imÃ³veis processados para: {', '.join(normalized_ufs)}")
+    typer.echo(f"{total} imóveis processados para: {', '.join(normalized_ufs)}")
 
 
 @app.command("download-csv")
@@ -43,14 +43,14 @@ def download_csv(
 def import_csv(file_path: str):
     pipeline = CaixaScannerPipeline()
     total = pipeline.import_csv(file_path)
-    typer.echo(f"{total} imÃ³veis importados do arquivo: {file_path}")
+    typer.echo(f"{total} imóveis importados do arquivo: {file_path}")
 
 
 @app.command("import-csv-batch")
 def import_csv_batch(file_paths: list[str]):
     pipeline = CaixaScannerPipeline()
     total = pipeline.import_csv_batch(file_paths)
-    typer.echo(f"{total} imÃ³veis importados a partir de {len(file_paths)} arquivos.")
+    typer.echo(f"{total} imóveis importados a partir de {len(file_paths)} arquivos.")
 
 
 @app.command("download-and-import-csv")
@@ -60,7 +60,7 @@ def download_and_import_csv(
 ):
     pipeline = CaixaScannerPipeline()
     total = pipeline.download_and_import_csvs(ufs, output_dir)
-    typer.echo(f"{total} imÃ³veis baixados/importados.")
+    typer.echo(f"{total} imóveis baixados/importados.")
 
 
 @app.command()
@@ -73,7 +73,7 @@ def top(limit: int = 20) -> None:
         for item in items:
             typer.echo(
                 f"score={item.opportunity_score:>5} | uf={item.uf} | cidade={item.city} | bairro={item.neighborhood} | "
-                f"preÃ§o={item.price} | desconto={item.discount_pct} | cÃ³digo={item.property_code}"
+                f"preço={item.price} | desconto={item.discount_pct} | código={item.property_code}"
             )
 
 
@@ -91,7 +91,7 @@ def send_alerts(
 
 @app.command()
 def alert(min_score: float = typer.Option(settings.alert_min_score, "--min-score")) -> None:
-    """Envia alertas Telegram para imÃ³veis elegÃ­veis."""
+    """Envia alertas Telegram para imóveis elegíveis."""
     pipeline = CaixaScannerPipeline()
     total = pipeline.send_alerts(min_score=min_score)
     typer.echo(f"{total} alerta(s) processado(s).")
