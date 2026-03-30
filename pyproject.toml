@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "caixa-scanner"
+version = "0.1.0"
+description = "Scanner de oportunidades em imóveis da Caixa com alertas no Telegram"
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4==4.13.4",
+  "lxml==5.4.0",
+  "pandas==2.3.0",
+  "pydantic==2.11.4",
+  "python-dotenv==1.1.0",
+  "requests==2.32.3",
+  "SQLAlchemy==2.0.40",
+  "typer==0.16.0",
+  "streamlit==1.44.1"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.2"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
