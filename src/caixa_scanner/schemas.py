@@ -21,6 +21,11 @@ class PropertyIn(BaseModel):
     edital_sale_date: str | None = None
     edital_payment_details: str | None = None
     edital_risk_notes: str | None = None
+    edital_has_occupied_risk: bool | None = None
+    edital_has_no_visit_risk: bool | None = None
+    edital_buyer_pays_condo: bool | None = None
+    edital_buyer_pays_iptu: bool | None = None
+    edital_has_judicial_risk: bool | None = None
     accepts_fgts: bool | None = None
     accepts_financing: bool | None = None
     expense_rules: str | None = None

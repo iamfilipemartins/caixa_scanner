@@ -30,6 +30,11 @@ class Property(Base):
     edital_sale_date: Mapped[str | None] = mapped_column(String(40))
     edital_payment_details: Mapped[str | None] = mapped_column(Text)
     edital_risk_notes: Mapped[str | None] = mapped_column(Text)
+    edital_has_occupied_risk: Mapped[bool | None] = mapped_column(Boolean)
+    edital_has_no_visit_risk: Mapped[bool | None] = mapped_column(Boolean)
+    edital_buyer_pays_condo: Mapped[bool | None] = mapped_column(Boolean)
+    edital_buyer_pays_iptu: Mapped[bool | None] = mapped_column(Boolean)
+    edital_has_judicial_risk: Mapped[bool | None] = mapped_column(Boolean)
 
     accepts_fgts: Mapped[bool | None] = mapped_column(Boolean)
     accepts_financing: Mapped[bool | None] = mapped_column(Boolean)

@@ -9,8 +9,8 @@ RISK_TERMS = {
     "ocupado": -18,
     "invadido": -25,
     "sem visita": -8,
-    "sem utilização de fgts": -4,
-    "não aceita financiamento": -8,
+    "sem utilizacao de fgts": -4,
+    "nao aceita financiamento": -8,
     "sob responsabilidade do comprador": -5,
 }
 
@@ -35,16 +35,16 @@ class OpportunityScorer:
                 reasons.append(f"desconto alto ({item.discount_pct:.1f}%)")
             elif item.discount_pct >= 25:
                 score += 10
-                reasons.append(f"desconto razoável ({item.discount_pct:.1f}%)")
+                reasons.append(f"desconto razoavel ({item.discount_pct:.1f}%)")
 
         if item.price and item.appraisal_value and item.price < item.appraisal_value:
             ratio = item.price / item.appraisal_value
             if ratio <= 0.65:
                 score += 12
-                reasons.append("preço bem abaixo da avaliação")
+                reasons.append("preco bem abaixo da avaliacao")
             elif ratio <= 0.80:
                 score += 6
-                reasons.append("preço abaixo da avaliação")
+                reasons.append("preco abaixo da avaliacao")
 
         if item.accepts_financing:
             score += 8
@@ -60,7 +60,23 @@ class OpportunityScorer:
         for term, delta in RISK_TERMS.items():
             if term in combined_text:
                 score += delta
-                reasons.append(f"penalização por risco: {term}")
+                reasons.append(f"penalizacao por risco: {term}")
+
+        if item.edital_has_occupied_risk:
+            score -= 12
+            reasons.append("risco estruturado: imovel ocupado")
+        if item.edital_has_no_visit_risk:
+            score -= 6
+            reasons.append("risco estruturado: visitacao restrita")
+        if item.edital_buyer_pays_condo:
+            score -= 4
+            reasons.append("risco estruturado: condominio por conta do comprador")
+        if item.edital_buyer_pays_iptu:
+            score -= 3
+            reasons.append("risco estruturado: IPTU por conta do comprador")
+        if item.edital_has_judicial_risk:
+            score -= 10
+            reasons.append("risco estruturado: mencao judicial no edital")
 
         if any(word in description for word in ("apartamento", "casa", "sobrado")):
             score += 4
@@ -69,7 +85,7 @@ class OpportunityScorer:
         if item.private_area_m2:
             if 38 <= item.private_area_m2 <= 90:
                 score += 5
-                reasons.append("metragem líquida comercialmente comum")
+                reasons.append("metragem liquida comercialmente comum")
             elif item.private_area_m2 < 25:
                 score -= 6
                 reasons.append("metragem muito baixa")

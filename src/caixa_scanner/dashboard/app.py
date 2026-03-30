@@ -17,14 +17,47 @@ from caixa_scanner.database import init_db
 
 st.set_page_config(
     page_title="Caixa Scanner Dashboard",
-    page_icon="🏠",
+    page_icon="house",
     layout="wide",
 )
+
+RISK_FLAG_LABELS = {
+    "edital_has_occupied_risk": "Imovel ocupado",
+    "edital_has_no_visit_risk": "Visitacao restrita",
+    "edital_buyer_pays_condo": "Condominio por conta do comprador",
+    "edital_buyer_pays_iptu": "IPTU por conta do comprador",
+    "edital_has_judicial_risk": "Mencao judicial",
+}
 
 
 @st.cache_resource
 def get_engine():
     return create_engine(settings.database_url, future=True)
+
+
+def bool_to_label(value: object) -> str:
+    if pd.isna(value):
+        return "Nao informado"
+    if isinstance(value, (bool, int)):
+        return "Sim" if bool(value) else "Nao"
+
+    normalized = str(value).strip().lower()
+    if normalized in {"sim", "true", "1"}:
+        return "Sim"
+    if normalized in {"nao", "false", "0"}:
+        return "Nao"
+    return "Nao informado"
+
+
+def format_currency(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    return f"R$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def build_risk_flag_summary(row: pd.Series) -> str:
+    labels = [label for column, label in RISK_FLAG_LABELS.items() if bool(row.get(column))]
+    return "; ".join(labels)
 
 
 @st.cache_data(ttl=300)
@@ -48,6 +81,11 @@ def load_data() -> pd.DataFrame:
         edital_sale_date,
         edital_payment_details,
         edital_risk_notes,
+        edital_has_occupied_risk,
+        edital_has_no_visit_risk,
+        edital_buyer_pays_condo,
+        edital_buyer_pays_iptu,
+        edital_has_judicial_risk,
         accepts_fgts,
         accepts_financing,
         expense_rules,
@@ -110,6 +148,11 @@ def load_data() -> pd.DataFrame:
         "edital_payment_details",
         "edital_risk_notes",
     ]
+    bool_cols = [
+        "accepts_fgts",
+        "accepts_financing",
+        *RISK_FLAG_LABELS.keys(),
+    ]
 
     for col in numeric_cols:
         if col in df.columns:
@@ -122,10 +165,10 @@ def load_data() -> pd.DataFrame:
             df[col] = ""
         df[col] = df[col].fillna("").astype(str).str.strip()
 
-    if "accepts_fgts" not in df.columns:
-        df["accepts_fgts"] = None
-    if "accepts_financing" not in df.columns:
-        df["accepts_financing"] = None
+    for col in bool_cols:
+        if col not in df.columns:
+            df[col] = pd.Series([None] * len(df), dtype="boolean")
+        df[col] = df[col].astype("boolean")
 
     df["opportunity_score_display"] = df["score_moradia"].where(
         df["score_moradia"].notna(),
@@ -141,35 +184,23 @@ def load_data() -> pd.DataFrame:
     df.loc[has_city & has_uf, "neighborhood_label"] = (
         df["neighborhood"] + " - " + df["city"] + "/" + df["uf"]
     )
-    df.loc[(df["neighborhood"] == "") & has_city & has_uf, "neighborhood_label"] = (
-        df["city"] + "/" + df["uf"]
-    )
+    df.loc[(df["neighborhood"] == "") & has_city & has_uf, "neighborhood_label"] = df["city"] + "/" + df["uf"]
 
     df["description_short"] = df["description"]
     df.loc[df["description_short"].str.len() > 140, "description_short"] = (
         df["description_short"].str.slice(0, 140) + "..."
     )
 
-    def bool_to_label(value):
-        if pd.isna(value):
-            return "Não informado"
-        if isinstance(value, (bool, int)):
-            return "Sim" if bool(value) else "Não"
-
-        normalized = str(value).strip().lower()
-        if normalized in {"sim", "true", "1"}:
-            return "Sim"
-        if normalized in {"não", "nao", "false", "0"}:
-            return "Não"
-        return "Não informado"
-
     df["accepts_fgts_label"] = df["accepts_fgts"].apply(bool_to_label)
     df["accepts_financing_label"] = df["accepts_financing"].apply(bool_to_label)
+    for column, label in RISK_FLAG_LABELS.items():
+        df[f"{column}_label"] = df[column].apply(bool_to_label)
+    df["edital_risk_flags"] = df.apply(build_risk_flag_summary, axis=1)
     return df
 
 
 def render_empty_state() -> None:
-    st.title("🏠 Caixa Scanner Dashboard")
+    st.title("Caixa Scanner Dashboard")
     st.info(
         "Nenhum dado encontrado no banco ainda. Rode primeiro o pipeline com "
         "`python -m caixa_scanner.main scan --ufs SP MG` e depois volte ao dashboard."
@@ -181,81 +212,75 @@ def build_filters(df: pd.DataFrame) -> pd.DataFrame:
     st.sidebar.header("Filtros")
 
     if "uf" in filtered.columns:
-        ufs = sorted([x for x in filtered["uf"].dropna().astype(str).unique().tolist() if x])
-        selected_ufs = st.sidebar.multiselect("UF", ufs)
-        if selected_ufs:
-            filtered = filtered[filtered["uf"].isin(selected_ufs)]
+        options = sorted([x for x in filtered["uf"].dropna().astype(str).unique().tolist() if x])
+        selected = st.sidebar.multiselect("UF", options)
+        if selected:
+            filtered = filtered[filtered["uf"].isin(selected)]
 
     if "city" in filtered.columns:
-        cities = sorted([x for x in filtered["city"].dropna().astype(str).unique().tolist() if x])
-        selected_cities = st.sidebar.multiselect("Cidade", cities)
-        if selected_cities:
-            filtered = filtered[filtered["city"].isin(selected_cities)]
+        options = sorted([x for x in filtered["city"].dropna().astype(str).unique().tolist() if x])
+        selected = st.sidebar.multiselect("Cidade", options)
+        if selected:
+            filtered = filtered[filtered["city"].isin(selected)]
 
     if "neighborhood" in filtered.columns:
-        neighborhoods = sorted([x for x in filtered["neighborhood"].dropna().astype(str).unique().tolist() if x])
-        selected_neighborhoods = st.sidebar.multiselect("Bairro", neighborhoods)
-        if selected_neighborhoods:
-            filtered = filtered[filtered["neighborhood"].isin(selected_neighborhoods)]
+        options = sorted([x for x in filtered["neighborhood"].dropna().astype(str).unique().tolist() if x])
+        selected = st.sidebar.multiselect("Bairro", options)
+        if selected:
+            filtered = filtered[filtered["neighborhood"].isin(selected)]
 
     if "property_type" in filtered.columns:
-        property_types = sorted([x for x in filtered["property_type"].dropna().astype(str).unique().tolist() if x])
-        selected_property_types = st.sidebar.multiselect("Tipo do imóvel", property_types)
-        if selected_property_types:
-            filtered = filtered[filtered["property_type"].isin(selected_property_types)]
+        options = sorted([x for x in filtered["property_type"].dropna().astype(str).unique().tolist() if x])
+        selected = st.sidebar.multiselect("Tipo do imovel", options)
+        if selected:
+            filtered = filtered[filtered["property_type"].isin(selected)]
 
-    if "bedrooms" in filtered.columns:
-        bedroom_values = sorted([int(x) for x in filtered["bedrooms"].dropna().unique().tolist() if pd.notna(x)])
-        selected_bedrooms = st.sidebar.multiselect("Quartos", bedroom_values)
-        if selected_bedrooms:
-            filtered = filtered[filtered["bedrooms"].isin(selected_bedrooms)]
+    if "edital_sale_mode" in filtered.columns:
+        options = sorted([x for x in filtered["edital_sale_mode"].dropna().astype(str).unique().tolist() if x])
+        selected = st.sidebar.multiselect("Modalidade do edital", options)
+        if selected:
+            filtered = filtered[filtered["edital_sale_mode"].isin(selected)]
 
-    if "parking_spots" in filtered.columns:
-        parking_values = sorted([int(x) for x in filtered["parking_spots"].dropna().unique().tolist() if pd.notna(x)])
-        selected_parking = st.sidebar.multiselect("Vagas", parking_values)
-        if selected_parking:
-            filtered = filtered[filtered["parking_spots"].isin(selected_parking)]
+    for field_name, label in [
+        ("bedrooms", "Quartos"),
+        ("parking_spots", "Vagas"),
+    ]:
+        if field_name in filtered.columns:
+            options = sorted([int(x) for x in filtered[field_name].dropna().unique().tolist() if pd.notna(x)])
+            selected = st.sidebar.multiselect(label, options)
+            if selected:
+                filtered = filtered[filtered[field_name].isin(selected)]
 
     if "private_area_m2" in filtered.columns and filtered["private_area_m2"].dropna().size > 0:
         min_area = float(filtered["private_area_m2"].dropna().min())
         max_area = float(filtered["private_area_m2"].dropna().max())
-        selected_area = (
+        area_range = (
             (min_area, max_area)
             if min_area == max_area
-            else st.sidebar.slider(
-                "Área privativa (m²)",
-                min_value=min_area,
-                max_value=max_area,
-                value=(min_area, max_area),
-            )
+            else st.sidebar.slider("Area privativa (m2)", min_value=min_area, max_value=max_area, value=(min_area, max_area))
         )
         filtered = filtered[
-            (filtered["private_area_m2"].fillna(0) >= selected_area[0])
-            & (filtered["private_area_m2"].fillna(0) <= selected_area[1])
+            (filtered["private_area_m2"].fillna(0) >= area_range[0])
+            & (filtered["private_area_m2"].fillna(0) <= area_range[1])
         ]
 
     if "price" in filtered.columns and filtered["price"].dropna().size > 0:
         min_price = float(filtered["price"].dropna().min())
         max_price = float(filtered["price"].dropna().max())
-        selected_price = (
+        price_range = (
             (min_price, max_price)
             if min_price == max_price
-            else st.sidebar.slider(
-                "Preço (R$)",
-                min_value=min_price,
-                max_value=max_price,
-                value=(min_price, max_price),
-            )
+            else st.sidebar.slider("Preco (R$)", min_value=min_price, max_value=max_price, value=(min_price, max_price))
         )
         filtered = filtered[
-            (filtered["price"].fillna(0) >= selected_price[0])
-            & (filtered["price"].fillna(0) <= selected_price[1])
+            (filtered["price"].fillna(0) >= price_range[0])
+            & (filtered["price"].fillna(0) <= price_range[1])
         ]
 
     if "discount_pct" in filtered.columns and filtered["discount_pct"].dropna().size > 0:
         min_discount = float(filtered["discount_pct"].dropna().min())
         max_discount = float(filtered["discount_pct"].dropna().max())
-        selected_discount = (
+        discount_range = (
             (min_discount, max_discount)
             if min_discount == max_discount
             else st.sidebar.slider(
@@ -266,52 +291,56 @@ def build_filters(df: pd.DataFrame) -> pd.DataFrame:
             )
         )
         filtered = filtered[
-            (filtered["discount_pct"].fillna(0) >= selected_discount[0])
-            & (filtered["discount_pct"].fillna(0) <= selected_discount[1])
+            (filtered["discount_pct"].fillna(0) >= discount_range[0])
+            & (filtered["discount_pct"].fillna(0) <= discount_range[1])
         ]
 
     if "opportunity_score_display" in filtered.columns and filtered["opportunity_score_display"].dropna().size > 0:
         min_score = float(filtered["opportunity_score_display"].dropna().min())
         max_score = float(filtered["opportunity_score_display"].dropna().max())
-        selected_score = (
+        score_range = (
             (min_score, max_score)
             if min_score == max_score
             else st.sidebar.slider(
-                "Score moradia",
+                "Score",
                 min_value=min_score,
                 max_value=max_score,
                 value=(min_score, max_score),
             )
         )
         filtered = filtered[
-            (filtered["opportunity_score_display"].fillna(0) >= selected_score[0])
-            & (filtered["opportunity_score_display"].fillna(0) <= selected_score[1])
+            (filtered["opportunity_score_display"].fillna(0) >= score_range[0])
+            & (filtered["opportunity_score_display"].fillna(0) <= score_range[1])
         ]
 
-    if "accepts_financing_label" in filtered.columns:
-        financing_filter = st.sidebar.selectbox("Financiamento", ["Todos", "Sim", "Não", "Não informado"])
-        if financing_filter != "Todos":
-            filtered = filtered[filtered["accepts_financing_label"] == financing_filter]
+    financing_filter = st.sidebar.selectbox("Financiamento", ["Todos", "Sim", "Nao", "Nao informado"])
+    if financing_filter != "Todos":
+        filtered = filtered[filtered["accepts_financing_label"] == financing_filter]
 
-    if "accepts_fgts_label" in filtered.columns:
-        fgts_filter = st.sidebar.selectbox("FGTS", ["Todos", "Sim", "Não", "Não informado"])
-        if fgts_filter != "Todos":
-            filtered = filtered[filtered["accepts_fgts_label"] == fgts_filter]
+    fgts_filter = st.sidebar.selectbox("FGTS", ["Todos", "Sim", "Nao", "Nao informado"])
+    if fgts_filter != "Todos":
+        filtered = filtered[filtered["accepts_fgts_label"] == fgts_filter]
+
+    selected_risk_flags = st.sidebar.multiselect("Riscos estruturados do edital", list(RISK_FLAG_LABELS.values()))
+    if selected_risk_flags:
+        risk_columns = [column for column, label in RISK_FLAG_LABELS.items() if label in selected_risk_flags]
+        mask = filtered[risk_columns].fillna(False).any(axis=1)
+        filtered = filtered[mask]
 
     return filtered
 
 
 def render_kpis(df: pd.DataFrame) -> None:
     col1, col2, col3, col4 = st.columns(4)
-    score_medio = round(df["opportunity_score_display"].dropna().mean(), 2) if not df.empty else 0
-    desconto_medio = round(df["discount_pct"].dropna().mean(), 2) if not df.empty else 0
-    ganho_medio = round(df["estimated_gain"].dropna().mean(), 2) if not df.empty else 0
-    area_media = round(df["private_area_m2"].dropna().mean(), 2) if not df.empty else 0
+    score_mean = round(df["opportunity_score_display"].dropna().mean(), 2) if not df.empty else 0.0
+    discount_mean = round(df["discount_pct"].dropna().mean(), 2) if not df.empty else 0.0
+    gain_mean = round(df["estimated_gain"].dropna().mean(), 2) if not df.empty else 0.0
+    occupied_share = round(df["edital_has_occupied_risk"].fillna(False).mean() * 100, 1) if not df.empty else 0.0
 
-    col1.metric("Score médio moradia", score_medio)
-    col2.metric("Desconto médio (%)", desconto_medio)
-    col3.metric("Ganho bruto médio (R$)", f"{ganho_medio:,.2f}")
-    col4.metric("Área privativa média (m²)", area_media)
+    col1.metric("Score medio", score_mean)
+    col2.metric("Desconto medio (%)", discount_mean)
+    col3.metric("Ganho bruto medio (R$)", f"{gain_mean:,.2f}")
+    col4.metric("Com risco de ocupacao (%)", occupied_share)
 
 
 def render_state_ranking(df: pd.DataFrame) -> None:
@@ -319,60 +348,48 @@ def render_state_ranking(df: pd.DataFrame) -> None:
     ranking = (
         df.sort_values(["uf", "opportunity_score_display"], ascending=[True, False])
         .groupby("uf", as_index=False)
-        .first()[[
-            "uf",
-            "property_code",
-            "city_label",
-            "neighborhood_label",
-            "property_type",
-            "private_area_m2",
-            "bedrooms",
-            "parking_spots",
-            "price",
-            "appraisal_value",
-            "discount_pct",
-            "estimated_gain",
-            "opportunity_score_display",
-            "score_preco",
-            "score_imovel",
-            "score_localizacao",
-            "score_liquidez_residencial",
-            "score_risco",
-            "accepts_financing_label",
-            "accepts_fgts_label",
-            "detail_url",
-            "edital_sale_mode",
-            "edital_sale_date",
-            "description_short",
-            "address",
-        ]]
+        .first()[
+            [
+                "uf",
+                "property_code",
+                "city_label",
+                "neighborhood_label",
+                "property_type",
+                "private_area_m2",
+                "bedrooms",
+                "parking_spots",
+                "price",
+                "appraisal_value",
+                "discount_pct",
+                "estimated_gain",
+                "opportunity_score_display",
+                "accepts_financing_label",
+                "accepts_fgts_label",
+                "edital_sale_mode",
+                "edital_risk_flags",
+                "detail_url",
+            ]
+        ]
         .rename(
             columns={
                 "uf": "UF",
-                "property_code": "Código",
+                "property_code": "Codigo",
                 "city_label": "Cidade",
                 "neighborhood_label": "Bairro",
                 "property_type": "Tipo",
-                "private_area_m2": "Área privativa (m²)",
+                "private_area_m2": "Area privativa (m2)",
                 "bedrooms": "Quartos",
                 "parking_spots": "Vagas",
-                "price": "Preço",
-                "appraisal_value": "Avaliação",
+                "price": "Preco",
+                "appraisal_value": "Avaliacao",
                 "discount_pct": "Desconto (%)",
                 "estimated_gain": "Ganho estimado",
-                "opportunity_score_display": "Score moradia",
-                "score_preco": "Score preço",
-                "score_imovel": "Score imóvel",
-                "score_localizacao": "Score localização",
-                "score_liquidez_residencial": "Score liquidez",
-                "score_risco": "Score risco",
+                "opportunity_score_display": "Score",
                 "accepts_financing_label": "Financiamento",
                 "accepts_fgts_label": "FGTS",
-                "detail_url": "Detalhe",
                 "edital_sale_mode": "Modalidade edital",
-                "edital_sale_date": "Data edital",
-                "description_short": "Descrição",
-                "address": "Endereço",
+                "edital_risk_flags": "Riscos estruturados",
+                "detail_url": "Detalhe",
             }
         )
     )
@@ -383,7 +400,7 @@ def render_charts(df: pd.DataFrame) -> None:
     left, right = st.columns(2)
 
     with left:
-        st.subheader("Top 10 estados por score médio")
+        st.subheader("Top 10 estados por score medio")
         state_scores = (
             df.groupby("uf", as_index=False)
             .agg(score_medio=("opportunity_score_display", "mean"), quantidade=("property_code", "count"))
@@ -408,50 +425,54 @@ def render_charts(df: pd.DataFrame) -> None:
     st.subheader("Score x desconto")
     scatter = df[["discount_pct", "opportunity_score_display", "uf"]].dropna().copy()
     if scatter.empty:
-        st.caption("Sem dados suficientes para o gráfico de dispersão.")
+        st.caption("Sem dados suficientes para o grafico de dispersao.")
     else:
         st.scatter_chart(scatter, x="discount_pct", y="opportunity_score_display", color="uf")
 
 
 def render_top_table(df: pd.DataFrame) -> None:
     st.subheader("Ranking geral filtrado")
-    limit = st.slider("Quantidade de imóveis no ranking", min_value=10, max_value=200, value=50, step=10)
+    limit = st.slider("Quantidade de imoveis no ranking", min_value=10, max_value=200, value=50, step=10)
     top_df = (
         df.sort_values(["opportunity_score_display", "discount_pct"], ascending=[False, False])
         .head(limit)
-        .loc[:, [
-            "property_code",
-            "uf",
-            "city_label",
-            "neighborhood_label",
-            "price",
-            "appraisal_value",
-            "estimated_gain",
-            "discount_pct",
-            "private_area_m2",
-            "bedrooms",
-            "parking_spots",
-            "accepts_financing_label",
-            "accepts_fgts_label",
-            "opportunity_score_display",
-            "score_reason",
-            "edital_sale_mode",
-            "edital_sale_date",
-            "edital_risk_notes",
-            "detail_url",
-            "edital_url",
-        ]]
+        .loc[
+            :,
+            [
+                "property_code",
+                "uf",
+                "city_label",
+                "neighborhood_label",
+                "price",
+                "appraisal_value",
+                "estimated_gain",
+                "discount_pct",
+                "private_area_m2",
+                "bedrooms",
+                "parking_spots",
+                "accepts_financing_label",
+                "accepts_fgts_label",
+                "opportunity_score_display",
+                "score_reason",
+                "edital_sale_mode",
+                "edital_sale_date",
+                "edital_risk_notes",
+                "edital_risk_flags",
+                "detail_url",
+                "edital_url",
+            ]
+        ]
         .rename(
             columns={
-                "property_code": "Código",
+                "property_code": "Codigo",
                 "uf": "UF",
                 "city_label": "Cidade",
                 "neighborhood_label": "Bairro",
-                "price": "Preço",
-                "appraisal_value": "Avaliação",
+                "price": "Preco",
+                "appraisal_value": "Avaliacao",
                 "estimated_gain": "Potencial bruto",
                 "discount_pct": "Desconto (%)",
-                "private_area_m2": "Área (m²)",
+                "private_area_m2": "Area (m2)",
                 "bedrooms": "Quartos",
                 "parking_spots": "Vagas",
                 "accepts_financing_label": "Financiamento",
@@ -460,7 +481,8 @@ def render_top_table(df: pd.DataFrame) -> None:
                 "score_reason": "Motivos do score",
                 "edital_sale_mode": "Modalidade edital",
                 "edital_sale_date": "Data edital",
-                "edital_risk_notes": "Riscos edital",
+                "edital_risk_notes": "Riscos em texto",
+                "edital_risk_flags": "Riscos estruturados",
                 "detail_url": "Detalhe",
                 "edital_url": "Edital",
             }
@@ -470,7 +492,7 @@ def render_top_table(df: pd.DataFrame) -> None:
 
 
 def render_download(df: pd.DataFrame) -> None:
-    st.subheader("Exportação")
+    st.subheader("Exportacao")
     ranked = df.sort_values("opportunity_score_display", ascending=False, na_position="last")
     csv_bytes = ranked.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
@@ -484,7 +506,7 @@ def render_download(df: pd.DataFrame) -> None:
 def render_property_cards(df: pd.DataFrame, limit: int = 20) -> None:
     st.subheader("Melhores oportunidades em cards")
     if df.empty:
-        st.info("Nenhum imóvel encontrado com os filtros atuais.")
+        st.info("Nenhum imovel encontrado com os filtros atuais.")
         return
 
     cards_df = df.head(limit).copy()
@@ -498,14 +520,15 @@ def render_property_cards(df: pd.DataFrame, limit: int = 20) -> None:
             row = cards_df.iloc[idx]
             with cols[j]:
                 with st.container(border=True):
-                    st.markdown(f"### {str(row.get('property_type', '') or '').title()} • {row.get('city_label', '')}")
+                    title = str(row.get("property_type", "") or "").title()
+                    st.markdown(f"### {title} | {row.get('city_label', '')}")
                     st.markdown(f"**Bairro:** {row.get('neighborhood_label', '')}")
-                    st.markdown(f"**Endereço:** {row.get('address', '')}")
-                    st.markdown(f"**Código:** {row.get('property_code', '')}")
+                    st.markdown(f"**Endereco:** {row.get('address', '')}")
+                    st.markdown(f"**Codigo:** {row.get('property_code', '')}")
 
-                    info_parts = []
+                    info_parts: list[str] = []
                     if pd.notna(row.get("private_area_m2")):
-                        info_parts.append(f"{float(row['private_area_m2']):.2f} m²")
+                        info_parts.append(f"{float(row['private_area_m2']):.2f} m2")
                     if pd.notna(row.get("bedrooms")):
                         info_parts.append(f"{int(row['bedrooms'])} quartos")
                     if pd.notna(row.get("parking_spots")):
@@ -513,21 +536,21 @@ def render_property_cards(df: pd.DataFrame, limit: int = 20) -> None:
                     if info_parts:
                         st.markdown(" | ".join(info_parts))
 
-                    finance_parts = []
+                    finance_parts: list[str] = []
                     if pd.notna(row.get("price")):
-                        finance_parts.append(
-                            f"Preço: R$ {float(row['price']):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        )
+                        finance_parts.append(f"Preco: {format_currency(row['price'])}")
                     if pd.notna(row.get("discount_pct")):
                         finance_parts.append(f"Desconto: {float(row['discount_pct']):.2f}%")
                     if pd.notna(row.get("opportunity_score_display")):
                         finance_parts.append(f"Score: {float(row['opportunity_score_display']):.2f}")
                     if finance_parts:
-                        st.markdown(" • ".join(finance_parts))
+                        st.markdown(" | ".join(finance_parts))
 
                     if row.get("edital_sale_mode"):
                         st.caption(f"Edital: {row['edital_sale_mode']} | {row.get('edital_sale_date') or 'sem data'}")
-                    if row.get("edital_risk_notes"):
+                    if row.get("edital_risk_flags"):
+                        st.caption(f"Riscos estruturados: {row['edital_risk_flags']}")
+                    elif row.get("edital_risk_notes"):
                         st.caption(f"Riscos: {row['edital_risk_notes']}")
                     elif row.get("score_moradia_reason"):
                         st.caption(row["score_moradia_reason"])
@@ -539,10 +562,9 @@ def render_property_cards(df: pd.DataFrame, limit: int = 20) -> None:
 
 
 def render_quick_lookup(df: pd.DataFrame) -> None:
-    st.subheader("Consulta rápida de imóvel")
+    st.subheader("Consulta rapida de imovel")
     property_codes = df["property_code"].dropna().astype(str).unique().tolist()
-    selected_code = st.selectbox("Selecione o código do imóvel", property_codes)
-
+    selected_code = st.selectbox("Selecione o codigo do imovel", property_codes)
     if not selected_code:
         return
 
@@ -551,38 +573,35 @@ def render_quick_lookup(df: pd.DataFrame) -> None:
         return
 
     row = selected_row.iloc[0]
-    st.markdown(f"**Código:** {row.get('property_code', '')}")
+    st.markdown(f"**Codigo:** {row.get('property_code', '')}")
     st.markdown(f"**Cidade/Bairro:** {row.get('city_label', '')} | {row.get('neighborhood_label', '')}")
-    st.markdown(f"**Endereço:** {row.get('address', '')}")
+    st.markdown(f"**Endereco:** {row.get('address', '')}")
     st.markdown(f"**Tipo:** {row.get('property_type', '')}")
-    st.markdown(f"**Área privativa:** {row.get('private_area_m2', '')}")
+    st.markdown(f"**Area privativa:** {row.get('private_area_m2', '')}")
     st.markdown(f"**Quartos:** {row.get('bedrooms', '')}")
     st.markdown(f"**Vagas:** {row.get('parking_spots', '')}")
-    st.markdown(f"**Preço:** R$ {row.get('price', 0):,.2f}" if pd.notna(row.get("price")) else "**Preço:**")
-    st.markdown(
-        f"**Avaliação:** R$ {row.get('appraisal_value', 0):,.2f}"
-        if pd.notna(row.get("appraisal_value"))
-        else "**Avaliação:**"
-    )
+    st.markdown(f"**Preco:** {format_currency(row.get('price'))}")
+    st.markdown(f"**Avaliacao:** {format_currency(row.get('appraisal_value'))}")
     st.markdown(f"**Desconto:** {row.get('discount_pct', '')}")
     st.markdown(f"**Score moradia:** {row.get('score_moradia', '')}")
     st.markdown(f"**Modalidade do edital:** {row.get('edital_sale_mode', '')}")
     st.markdown(f"**Data do edital:** {row.get('edital_sale_date', '')}")
-    st.markdown(f"**Riscos do edital:** {row.get('edital_risk_notes', '')}")
-    st.markdown(f"**Descrição completa:** {row.get('description', '')}")
+    st.markdown(f"**Riscos estruturados:** {row.get('edital_risk_flags', '')}")
+    st.markdown(f"**Riscos em texto:** {row.get('edital_risk_notes', '')}")
+    st.markdown(f"**Descricao completa:** {row.get('description', '')}")
     detail_url = row.get("detail_url", "")
     if detail_url:
-        st.markdown(f"[Abrir página do imóvel]({detail_url})")
+        st.markdown(f"[Abrir pagina do imovel]({detail_url})")
 
 
 def main() -> None:
-    st.title("🏠 Caixa Scanner Dashboard")
-    st.caption("Visão rápida das melhores oportunidades por estado, com filtros e ranking geral.")
+    st.title("Caixa Scanner Dashboard")
+    st.caption("Visao rapida das melhores oportunidades por estado, com filtros e ranking geral.")
 
     init_db()
 
-    db_hint = Path(settings.database_url.replace("sqlite:///", "")) if settings.database_url.startswith("sqlite:///") else None
-    if db_hint:
+    if settings.database_url.startswith("sqlite:///"):
+        db_hint = Path(settings.database_url.replace("sqlite:///", ""))
         st.caption(f"Banco atual: `{db_hint}`")
 
     df = load_data()
@@ -592,10 +611,12 @@ def main() -> None:
 
     filtered = build_filters(df)
     render_kpis(filtered)
-    render_property_cards(filtered.sort_values("opportunity_score_display", ascending=False, na_position="last"), limit=20)
+
+    ranked = filtered.sort_values("opportunity_score_display", ascending=False, na_position="last")
+    render_property_cards(ranked, limit=20)
     render_quick_lookup(filtered)
 
-    top_moradia_cols = [
+    top_columns = [
         "property_code",
         "city_label",
         "neighborhood_label",
@@ -618,41 +639,42 @@ def main() -> None:
         "edital_sale_mode",
         "edital_sale_date",
         "edital_risk_notes",
+        "edital_risk_flags",
         "detail_url",
         "description_short",
     ]
-    ranked = filtered.sort_values("opportunity_score_display", ascending=False, na_position="last")
-    table_df = ranked[[col for col in top_moradia_cols if col in ranked.columns]].head(20).rename(
+    table_df = ranked[[col for col in top_columns if col in ranked.columns]].head(20).rename(
         columns={
-            "property_code": "Código",
+            "property_code": "Codigo",
             "city_label": "Cidade",
             "neighborhood_label": "Bairro",
-            "address": "Endereço",
+            "address": "Endereco",
             "property_type": "Tipo",
-            "private_area_m2": "Área privativa (m²)",
+            "private_area_m2": "Area privativa (m2)",
             "bedrooms": "Quartos",
             "parking_spots": "Vagas",
-            "price": "Preço",
-            "appraisal_value": "Avaliação",
+            "price": "Preco",
+            "appraisal_value": "Avaliacao",
             "discount_pct": "Desconto (%)",
             "estimated_gain": "Ganho estimado",
             "score_moradia": "Score moradia",
-            "score_preco": "Score preço",
-            "score_imovel": "Score imóvel",
-            "score_localizacao": "Score localização",
+            "score_preco": "Score preco",
+            "score_imovel": "Score imovel",
+            "score_localizacao": "Score localizacao",
             "score_liquidez_residencial": "Score liquidez",
             "score_risco": "Score risco",
             "score_moradia_reason": "Justificativa",
             "edital_sale_mode": "Modalidade edital",
             "edital_sale_date": "Data edital",
-            "edital_risk_notes": "Riscos edital",
+            "edital_risk_notes": "Riscos em texto",
+            "edital_risk_flags": "Riscos estruturados",
             "detail_url": "Link",
-            "description_short": "Descrição",
+            "description_short": "Descricao",
         }
     )
     st.dataframe(table_df, use_container_width=True, hide_index=True)
 
-    tab1, tab2, tab3 = st.tabs(["Visão por estado", "Ranking detalhado", "Dados exportáveis"])
+    tab1, tab2, tab3 = st.tabs(["Visao por estado", "Ranking detalhado", "Dados exportaveis"])
     with tab1:
         render_state_ranking(filtered)
         render_charts(filtered)
