@@ -458,13 +458,14 @@ CUSTOM_CSS = """
         overflow: hidden;
         margin-top: 1rem;
         margin-bottom: 1rem;
-        padding: 1.15rem 1.2rem 1rem 1.2rem;
+        padding: 1.3rem 1.3rem 1.15rem 1.3rem;
         border-radius: 24px;
         background:
-            radial-gradient(circle at top right, rgba(216, 177, 90, 0.22), transparent 26%),
-            linear-gradient(135deg, rgba(17, 52, 45, 0.96) 0%, rgba(28, 74, 64, 0.92) 58%, rgba(78, 88, 58, 0.88) 100%);
-        border: 1px solid rgba(255, 249, 239, 0.12);
-        box-shadow: 0 24px 44px rgba(19, 60, 51, 0.16);
+            radial-gradient(circle at top right, rgba(216, 177, 90, 0.18), transparent 24%),
+            radial-gradient(circle at 20% 20%, rgba(255, 249, 239, 0.08), transparent 28%),
+            linear-gradient(135deg, rgba(15, 48, 41, 0.98) 0%, rgba(24, 69, 59, 0.95) 55%, rgba(92, 96, 58, 0.90) 100%);
+        border: 1px solid rgba(255, 249, 239, 0.14);
+        box-shadow: 0 24px 44px rgba(19, 60, 51, 0.18);
     }
     .import-shell::after {
         content: "";
@@ -478,89 +479,158 @@ CUSTOM_CSS = """
     .import-grid {
         display: grid;
         grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.9fr);
-        gap: 1rem;
-        align-items: start;
+        gap: 1.15rem;
+        align-items: stretch;
     }
     .import-kicker {
         font-size: 0.75rem;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: rgba(255, 249, 239, 0.72);
+        letter-spacing: 0.12em;
+        color: rgba(255, 249, 239, 0.86);
+        font-weight: 700;
     }
     .import-title {
-        margin: 0.35rem 0 0 0;
+        margin: 0.55rem 0 0 0;
         color: #fffaf2;
-        font-size: 1.55rem;
+        font-size: 1.9rem;
         line-height: 1.02;
-        letter-spacing: -0.03em;
+        letter-spacing: -0.04em;
         font-weight: 760;
+        max-width: 720px;
+        text-wrap: balance;
     }
     .import-copy {
-        margin-top: 0.55rem;
-        color: rgba(255, 249, 239, 0.84);
-        max-width: 780px;
-        line-height: 1.48;
+        margin-top: 0.8rem;
+        color: rgba(255, 249, 239, 0.94);
+        font-size: 1rem;
+        max-width: 700px;
+        line-height: 1.56;
     }
     .import-code {
         display: inline-flex;
         align-items: center;
-        margin-top: 0.65rem;
-        padding: 0.32rem 0.6rem;
+        margin-top: 0.9rem;
+        padding: 0.38rem 0.68rem;
         border-radius: 999px;
-        background: rgba(255, 249, 239, 0.10);
-        border: 1px solid rgba(255, 249, 239, 0.12);
-        color: #fff7ec;
+        background: rgba(255, 249, 239, 0.14);
+        border: 1px solid rgba(255, 249, 239, 0.16);
+        color: #fffaf2;
         font-family: "Consolas", "SFMono-Regular", monospace;
         font-size: 0.83rem;
+        font-weight: 600;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
     .import-steps {
         display: grid;
-        gap: 0.7rem;
+        gap: 0.8rem;
+        align-content: center;
     }
     .import-step {
-        padding: 0.78rem 0.85rem;
+        padding: 0.9rem 0.95rem;
         border-radius: 18px;
-        background: rgba(255, 249, 239, 0.08);
-        border: 1px solid rgba(255, 249, 239, 0.10);
-        backdrop-filter: blur(8px);
+        background: linear-gradient(180deg, rgba(255, 249, 239, 0.12), rgba(255, 249, 239, 0.08));
+        border: 1px solid rgba(255, 249, 239, 0.14);
+        backdrop-filter: blur(10px);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
     .import-step-label {
         font-size: 0.72rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: rgba(255, 249, 239, 0.62);
+        color: rgba(255, 249, 239, 0.74);
+        font-weight: 700;
     }
     .import-step-value {
-        margin-top: 0.22rem;
-        color: #fffaf2;
+        margin-top: 0.28rem;
+        color: #fffdf8;
         font-size: 0.95rem;
-        line-height: 1.35;
+        line-height: 1.45;
         font-weight: 600;
     }
     .import-widget-shell {
         margin-top: 0.9rem;
-        padding: 1rem;
-        border-radius: 20px;
-        background: rgba(255, 255, 255, 0.76);
+        padding: 1.1rem 1.1rem 1rem 1.1rem;
+        border-radius: 22px;
+        background:
+            radial-gradient(circle at top right, rgba(216, 177, 90, 0.08), transparent 24%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 245, 237, 0.92));
+        border: 1px solid rgba(19, 60, 51, 0.10);
+        box-shadow: 0 16px 32px rgba(19, 60, 51, 0.09);
+    }
+    .import-widget-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 0.9rem;
+    }
+    .import-widget-title {
+        margin: 0;
+        color: #133c33;
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    .import-widget-copy {
+        margin: 0.24rem 0 0 0;
+        color: #4b6058;
+        font-size: 0.94rem;
+        line-height: 1.45;
+        max-width: 680px;
+    }
+    .import-widget-note {
+        padding: 0.45rem 0.7rem;
+        border-radius: 999px;
+        background: rgba(19, 60, 51, 0.06);
         border: 1px solid rgba(19, 60, 51, 0.08);
-        box-shadow: 0 12px 28px rgba(19, 60, 51, 0.08);
+        color: #29453d;
+        font-size: 0.8rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .import-widget-shell [data-testid="stFileUploader"] > label,
+    .import-widget-shell [data-testid="stFileUploader"] [data-testid="stWidgetLabel"] {
+        display: none !important;
     }
     .import-widget-shell [data-testid="stFileUploaderDropzone"] {
-        border: 1.5px dashed rgba(19, 60, 51, 0.18);
+        border: 1.5px dashed rgba(19, 60, 51, 0.22);
         border-radius: 18px;
         background:
-            radial-gradient(circle at top right, rgba(216, 177, 90, 0.10), transparent 30%),
-            linear-gradient(180deg, rgba(248, 246, 240, 0.95), rgba(243, 239, 229, 0.82));
-        transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
-        min-height: 150px;
+            radial-gradient(circle at top right, rgba(216, 177, 90, 0.12), transparent 28%),
+            linear-gradient(180deg, rgba(251, 249, 244, 0.98), rgba(243, 238, 226, 0.94));
+        transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+        min-height: 164px;
+        padding: 0.35rem;
     }
     .import-widget-shell [data-testid="stFileUploaderDropzone"]:hover {
-        border-color: rgba(19, 60, 51, 0.34);
-        box-shadow: 0 12px 24px rgba(19, 60, 51, 0.08);
+        border-color: rgba(19, 60, 51, 0.40);
+        box-shadow: 0 12px 24px rgba(19, 60, 51, 0.10);
         transform: translateY(-1px);
     }
     .import-widget-shell [data-testid="stFileUploaderDropzone"] * {
         color: #17362f !important;
+    }
+    .import-widget-shell [data-testid="stFileUploaderDropzone"] small,
+    .import-widget-shell [data-testid="stFileUploaderDropzone"] span,
+    .import-widget-shell [data-testid="stFileUploaderDropzone"] p {
+        color: #38524a !important;
+        opacity: 1 !important;
+    }
+    .import-widget-shell [data-testid="stFileUploaderDropzone"] section {
+        color: #17362f !important;
+    }
+    .import-widget-shell [data-testid="stFileUploaderDropzone"] button {
+        border-radius: 12px !important;
+        border: 1px solid rgba(19, 60, 51, 0.14) !important;
+        background: #fffdf9 !important;
+        color: #143f35 !important;
+        font-weight: 700 !important;
+        box-shadow: 0 8px 16px rgba(19, 60, 51, 0.08);
+    }
+    .import-widget-shell [data-testid="stFileUploaderDropzone"] button:hover {
+        border-color: rgba(19, 60, 51, 0.20) !important;
+        background: #f6f3ea !important;
+        color: #12382f !important;
     }
     .import-widget-shell .stButton > button {
         min-height: 52px;
@@ -584,6 +654,12 @@ CUSTOM_CSS = """
     @media (max-width: 980px) {
         .import-grid {
             grid-template-columns: 1fr;
+        }
+        .import-widget-header {
+            flex-direction: column;
+        }
+        .import-widget-note {
+            white-space: normal;
         }
     }
     .property-card {
@@ -1279,11 +1355,26 @@ def render_csv_import_panel() -> None:
         unsafe_allow_html=True,
     )
     st.markdown('<div class="import-widget-shell">', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="import-widget-header">
+            <div>
+                <div class="import-widget-title">Importe os CSVs da Caixa</div>
+                <div class="import-widget-copy">
+                    Envie um ou mais arquivos no formato padrao para atualizar a base, recalcular score e refletir os dados no dashboard.
+                </div>
+            </div>
+            <div class="import-widget-note">CSV por UF ou lote combinado</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     uploaded_files = st.file_uploader(
         "Selecione os CSVs da Caixa",
         type=["csv"],
         accept_multiple_files=True,
         help="Voce pode enviar varios arquivos, como MG e SP, na mesma importacao.",
+        label_visibility="collapsed",
     )
 
     if st.button("Importar arquivos e atualizar dashboard", type="primary", use_container_width=True):
