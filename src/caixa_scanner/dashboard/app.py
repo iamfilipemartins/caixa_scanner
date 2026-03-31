@@ -453,6 +453,139 @@ CUSTOM_CSS = """
         padding: 0.12rem 0.35rem;
         border-radius: 6px;
     }
+    .import-shell {
+        position: relative;
+        overflow: hidden;
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+        padding: 1.15rem 1.2rem 1rem 1.2rem;
+        border-radius: 24px;
+        background:
+            radial-gradient(circle at top right, rgba(216, 177, 90, 0.22), transparent 26%),
+            linear-gradient(135deg, rgba(17, 52, 45, 0.96) 0%, rgba(28, 74, 64, 0.92) 58%, rgba(78, 88, 58, 0.88) 100%);
+        border: 1px solid rgba(255, 249, 239, 0.12);
+        box-shadow: 0 24px 44px rgba(19, 60, 51, 0.16);
+    }
+    .import-shell::after {
+        content: "";
+        position: absolute;
+        inset: auto -8% -42% auto;
+        width: 260px;
+        height: 260px;
+        background: radial-gradient(circle, rgba(255, 223, 140, 0.18), transparent 70%);
+        pointer-events: none;
+    }
+    .import-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.9fr);
+        gap: 1rem;
+        align-items: start;
+    }
+    .import-kicker {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(255, 249, 239, 0.72);
+    }
+    .import-title {
+        margin: 0.35rem 0 0 0;
+        color: #fffaf2;
+        font-size: 1.55rem;
+        line-height: 1.02;
+        letter-spacing: -0.03em;
+        font-weight: 760;
+    }
+    .import-copy {
+        margin-top: 0.55rem;
+        color: rgba(255, 249, 239, 0.84);
+        max-width: 780px;
+        line-height: 1.48;
+    }
+    .import-code {
+        display: inline-flex;
+        align-items: center;
+        margin-top: 0.65rem;
+        padding: 0.32rem 0.6rem;
+        border-radius: 999px;
+        background: rgba(255, 249, 239, 0.10);
+        border: 1px solid rgba(255, 249, 239, 0.12);
+        color: #fff7ec;
+        font-family: "Consolas", "SFMono-Regular", monospace;
+        font-size: 0.83rem;
+    }
+    .import-steps {
+        display: grid;
+        gap: 0.7rem;
+    }
+    .import-step {
+        padding: 0.78rem 0.85rem;
+        border-radius: 18px;
+        background: rgba(255, 249, 239, 0.08);
+        border: 1px solid rgba(255, 249, 239, 0.10);
+        backdrop-filter: blur(8px);
+    }
+    .import-step-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: rgba(255, 249, 239, 0.62);
+    }
+    .import-step-value {
+        margin-top: 0.22rem;
+        color: #fffaf2;
+        font-size: 0.95rem;
+        line-height: 1.35;
+        font-weight: 600;
+    }
+    .import-widget-shell {
+        margin-top: 0.9rem;
+        padding: 1rem;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px solid rgba(19, 60, 51, 0.08);
+        box-shadow: 0 12px 28px rgba(19, 60, 51, 0.08);
+    }
+    .import-widget-shell [data-testid="stFileUploaderDropzone"] {
+        border: 1.5px dashed rgba(19, 60, 51, 0.18);
+        border-radius: 18px;
+        background:
+            radial-gradient(circle at top right, rgba(216, 177, 90, 0.10), transparent 30%),
+            linear-gradient(180deg, rgba(248, 246, 240, 0.95), rgba(243, 239, 229, 0.82));
+        transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+        min-height: 150px;
+    }
+    .import-widget-shell [data-testid="stFileUploaderDropzone"]:hover {
+        border-color: rgba(19, 60, 51, 0.34);
+        box-shadow: 0 12px 24px rgba(19, 60, 51, 0.08);
+        transform: translateY(-1px);
+    }
+    .import-widget-shell [data-testid="stFileUploaderDropzone"] * {
+        color: #17362f !important;
+    }
+    .import-widget-shell .stButton > button {
+        min-height: 52px;
+        border-radius: 16px;
+        border: 1px solid rgba(19, 60, 51, 0.12);
+        background: linear-gradient(135deg, #143f35 0%, #245548 100%);
+        color: #fff9ef;
+        font-weight: 700;
+        font-size: 1rem;
+        box-shadow: 0 12px 26px rgba(19, 60, 51, 0.16);
+    }
+    .import-widget-shell .stButton > button:hover {
+        border-color: rgba(19, 60, 51, 0.12);
+        background: linear-gradient(135deg, #17483d 0%, #2c6554 100%);
+        color: #fff9ef;
+    }
+    .import-widget-shell .stButton > button:focus:not(:active) {
+        border-color: rgba(19, 60, 51, 0.18);
+        color: #fff9ef;
+    }
+    @media (max-width: 980px) {
+        .import-grid {
+            grid-template-columns: 1fr;
+        }
+    }
     .property-card {
         padding: 1.1rem 1.15rem 1rem 1.15rem;
         background: rgba(255, 255, 255, 0.82);
@@ -1117,31 +1250,60 @@ def import_uploaded_csvs(uploaded_files: list[object]) -> int:
 
 
 def render_csv_import_panel() -> None:
-    with st.expander("Importar CSV da Caixa no app", expanded=False):
-        st.caption(
-            "No Streamlit Community Cloud, voce pode enviar um ou mais arquivos "
-            "`Lista_imoveis_XX.csv` para popular a base sem usar terminal."
-        )
-        uploaded_files = st.file_uploader(
-            "Selecione os CSVs da Caixa",
-            type=["csv"],
-            accept_multiple_files=True,
-            help="Voce pode enviar varios arquivos, como MG e SP, na mesma importacao.",
-        )
+    st.markdown(
+        """
+        <div class="import-shell">
+            <div class="import-grid">
+                <div>
+                    <div class="import-kicker">Onboarding de dados</div>
+                    <h2 class="import-title">Traga a base da Caixa para dentro do dashboard</h2>
+                    <div class="import-copy">
+                        Envie um ou mais arquivos CSV e alimente a visao online sem depender de terminal,
+                        script local ou acesso ao servidor.
+                    </div>
+                    <div class="import-code">Lista_imoveis_XX.csv</div>
+                </div>
+                <div class="import-steps">
+                    <div class="import-step">
+                        <div class="import-step-label">Passo 1</div>
+                        <div class="import-step-value">Selecione arquivos de uma ou mais UFs.</div>
+                    </div>
+                    <div class="import-step">
+                        <div class="import-step-label">Passo 2</div>
+                        <div class="import-step-value">Clique em importar para calcular score e atualizar a base.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="import-widget-shell">', unsafe_allow_html=True)
+    uploaded_files = st.file_uploader(
+        "Selecione os CSVs da Caixa",
+        type=["csv"],
+        accept_multiple_files=True,
+        help="Voce pode enviar varios arquivos, como MG e SP, na mesma importacao.",
+    )
 
-        if st.button("Importar arquivos", type="primary", use_container_width=True):
-            if not uploaded_files:
-                st.warning("Selecione ao menos um arquivo CSV para importar.")
-                return
+    if st.button("Importar arquivos e atualizar dashboard", type="primary", use_container_width=True):
+        if not uploaded_files:
+            st.warning("Selecione ao menos um arquivo CSV para importar.")
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
 
-            try:
-                saved = import_uploaded_csvs(uploaded_files)
-            except Exception as exc:
-                st.error(f"Falha ao importar os CSVs enviados: {exc}")
-                return
+        try:
+            saved = import_uploaded_csvs(uploaded_files)
+        except Exception as exc:
+            st.error(f"Falha ao importar os CSVs enviados: {exc}")
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
 
-            st.success(f"{saved} imoveis importados com sucesso.")
-            st.rerun()
+        st.success(f"{saved} imoveis importados com sucesso.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_empty_state() -> None:
